@@ -150,6 +150,10 @@ class ReportManager(object):
 
     def __buildIndexPage(self,data):
 
+        cssName =   os.path.join("Report","Chart.css")
+        with open(cssName,"r") as fp:
+            cssText = fp.read()
+
         chartArgs   =   []
         for k in sorted(data["Charts"].keys()):
             v = data["Charts"][k]
@@ -159,7 +163,7 @@ class ReportManager(object):
         html    =   E.HTML(
                         E.HEAD( 
                             E.TITLE("Foom"),
-                            E.LINK(rel="stylesheet", type="text/css", href="Chart.css"),
+                            E.STYLE(cssText),
                         ),
                         E.BODY(
                           E.P(

@@ -42,12 +42,12 @@ class Profile(object):
     def save(self):
         if not os.path.exists("Profiles"):
             os.mkdir("Profiles")
-        fileName = os.path.join("Profiles","%s.ini" % self.Id)
+        fileName = os.path.join("Profiles","-%s.ini" % self.Id)
 
         config              =   ConfigParser.ConfigParser()
         config.optionxform  =   str
         config.add_section("Details")
-        config.set("Details","Name",        self.Name)
+        config.set("Details","Name",        self.Name.encode('ascii','ignore'))
         config.set("Details","Age",         self.Age)
         config.set("Details","Gender",      self.Gender)
         config.set("Details","Type",        self.Type)
@@ -72,6 +72,8 @@ class Profile(object):
         saveDict("Relationships",self.Relationships)
         with open(fileName,'wb') as configFile:
             config.write(configFile)
+
+        os.rename(fileName,os.path.join("Profiles","-%s.ini" % self.Id))
 
     def __str__(self):
         rv = "\n"
