@@ -10,6 +10,7 @@ import pickle
 import getpass
 import time
 import glob
+import cPickle as pickle
 from datetime import date,timedelta
 from lxml import html
 from Profile import Profile
@@ -184,21 +185,53 @@ class CrawlerProfile(Profile):
 
         return True
 
-class Progress(object):
+class FauxParser(object):
 
+    def __init__(self):
+        self.__sections =   {}
+
+    def clear(self):
+        for v in self.__sections.values():
+            v.clear()
+
+    def add_section(self,section):
+        self.__sections[section]    =   set()
+
+    def set(self,section,key):
+        self.__sections[section].add(key)
+
+    def remove_option(self,section,key):
+        #sys.stderr.write("removing [%s] from [%s]\n" % (key,self.__sections[section]))
+        self.__sections[section].remove(key)
+
+    def has_option(self,section,key):
+        return key in self.__sections[section]
+
+    def options(self,section):
+        return self.__sections[section]
+
+    def len(self,section):
+        return len(self.__sections[section])
+
+    def pop(self,section):
+        return self.__sections[section].pop()
+
+class Progress(object):
 
     def __init__(self,rebuild=False):
         self.__mutex        =   Lock()
         with self.__mutex:
-            self.__progressFile =   os.path.join(session.getDataPath(),"progress.ini")
+            self.__progressFile =   os.path.join(session.getDataPath(),"progress.dat")
             self.__progressTemp =   os.path.join(session.getDataPath(),"progress.tmp")
 
-            self.__progress     =   FastParser(allow_no_value=True)
-            self.__progress.optionxform=str
+            #self.__progress     =   FastParser(allow_no_value=True)
+            #self.__progress.optionxform=str
 
-            if os.path.exists(self.__progressFile) and not rebuild:        
-                self.__progress.read(self.__progressFile)
+            if os.path.exists(self.__progressFile) and not rebuild:       
+                self.__progress = pickle.load( open( self.__progressFile, "rb" ) )
+                #self.__progress.read(self.__progressFile)
             else:
+                self.__progress =   FauxParser()
                 self.__progress.add_section("PendingGroups")
                 self.__progress.add_section("PendingProfiles")
                 self.__progress.add_section("BadProfiles")
@@ -208,38 +241,46 @@ class Progress(object):
                 self.__progress.add_section("BadGroups")
                 self.__progress.add_section("ActiveProfiles")
                 self.__saveProgress()
-            self.__count = 0
-            self.__rate = 0
+            self.__exit     =   False
+            self.__count    =   0
+            self.__rate     =   0
             self.__nextTime = time.time()+60
-            self.__exit =   False
 
         if rebuild:
             self.__rebuild()
             self.printProgress()
             self.__saveProgress()
 
-
-
+    def initPending(self,pid):
+        self.__progress.clear()
+        self.__progress.set("PendingProfiles",pid)
+        self.__saveProgress()
+ 
     def __rebuild(self):
         sys.stderr.write("Starting Rebuild\n")
+        self.__progress.clear()
         fileNames = glob.glob(os.path.join("Profiles","*.ini"))
-        for idx in range(len(fileNames)):
-            fileName    =   fileNames[idx]
-            pid         =   re.sub(r'[^0-9]','', fileName)
-            self.__progress.set("CompletedProfiles",pid)
+        if len(fileNames) == 0:
+            sys.stderr.write("No Data, defaulting.\n")
+            self.__progress.set("PendingProfiles",1)
+        else:
+            for idx in range(len(fileNames)):
+                fileName    =   fileNames[idx]
+                pid         =   re.sub(r'[^0-9]','', fileName)
+                self.__progress.set("CompletedProfiles",pid)
 
-        for idx in range(len(fileNames)):
-            fileName    =   fileNames[idx]
-            pid         =   re.sub(r'[^0-9]','', fileName)
-            config       =   ConfigParser.ConfigParser()
-            config.optionxform=str
-            config.read(fileName)
-            for k in config.options("Friends") + config.options("Relationships"):
-                if not self.__progress.has_option("CompletedProfiles",k) \
-                    and not self.__progress.has_option("PendingProfiles",k):
-                    self.__progress.set("PendingProfiles",k)
-            if idx%256 == 0:
-                sys.stderr.write("[%s]\n" % idx)
+            for idx in range(len(fileNames)):
+                fileName    =   fileNames[idx]
+                pid         =   re.sub(r'[^0-9]','', fileName)
+                config      =   ConfigParser.ConfigParser()
+                config.optionxform=str
+                config.read(fileName)
+                for k in config.options("Friends") + config.options("Relationships"):
+                    if not self.__progress.has_option("CompletedProfiles",k) \
+                        and not self.__progress.has_option("PendingProfiles",k):
+                        self.__progress.set("PendingProfiles",k)
+                if idx%256 == 0:
+                    sys.stderr.write("[%s]\n" % idx)
 
         sys.stderr.write("Done Rebuild\n")
 
@@ -252,12 +293,11 @@ class Progress(object):
 
     def nextProfile(self):
         with self.__mutex:
-            if self.__progress.options("PendingProfiles") == 0:
+            if self.__progress.len("PendingProfiles") == 0:
                 return None
             self.__count += 1
-            rv = self.__progress.options("PendingProfiles")[0]
+            rv = self.__progress.pop("PendingProfiles")
             self.__progress.set("ActiveProfiles",rv)
-            self.__progress.remove_option("PendingProfiles",rv)
             return rv 
 
     def badProfile(self,pid):
@@ -290,11 +330,12 @@ class Progress(object):
 
     def getCompletedProfiles(self):
         with self.__mutex:
-            return self.__progress.options("CompletedProfiles")
+            return self.__progress.len("CompletedProfiles")
         
     def __saveProgress(self):
-        with open(self.__progressTemp,'wb') as fp:
-            self.__progress.write(fp)
+        pickle.dump( self.__progress, open(self.__progressTemp, "wb" ) )
+        #with open(self.__progressTemp,'wb') as fp:
+        #    self.__progress.write(fp)
         os.rename(self.__progressTemp,self.__progressFile)
 
     def printProgress(self):
@@ -444,7 +485,11 @@ if __name__ == "__main__":
 
     if options.rebuild:
         sys.stderr.write("Rebuilding Progress File\n")
-        Progress(True)
+        if options.profile is not None:
+            progress = Progress()
+            progress.initPending(options.profile)
+        else:
+            Progress(True)
     elif options.profile is not None:
         profile = CrawlerProfile(options.profile)
         if profile.load(crawler.getSession()):
@@ -461,8 +506,8 @@ if __name__ == "__main__":
             sys.stderr.write("Starting Crawler [%d]\n" % num)
             while not progress.getExit():
                 crawler.doTick()
-                #progress.printProgress()
             sys.stderr.write("Ending Crawler [%d]\n" % num)
+            progress.setExit()
 
         progress    =   Progress()
         progress.printProgress()
@@ -471,7 +516,7 @@ if __name__ == "__main__":
             threads.append(Thread(None,target=RunCrawler,args=(i,)))
             threads[-1].start()
         try:
-            while True:
+            while not progress.getExit():
                 time.sleep(10)
                 progress.printProgress()
         except:

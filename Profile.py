@@ -73,7 +73,7 @@ class Profile(object):
         with open(fileName,'wb') as configFile:
             config.write(configFile)
 
-        os.rename(fileName,os.path.join("Profiles","%s.tmp" % self.Id))
+        os.rename(fileName,os.path.join("Profiles","%s.ini" % self.Id))
 
     def __str__(self):
         rv = "\n"
