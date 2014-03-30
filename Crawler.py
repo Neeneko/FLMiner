@@ -256,6 +256,7 @@ class Progress(object):
                 return None
             self.__count += 1
             rv = self.__progress.options("PendingProfiles")[0]
+            self.__progress.set("ActiveProfiles",rv)
             self.__progress.remove_option("PendingProfiles",rv)
             return rv 
 
@@ -266,19 +267,24 @@ class Progress(object):
             self.__saveProgress()
 
     def completeProfile(self,pid,op,og):
+        sys.stderr.write("Completing [%s]\n" % pid)
         with self.__mutex:
-            for pid in op:
-                if not self.__progress.has_option("PendingProfiles",pid)            \
-                    and not self.__progress.has_option("CompletedProfiles",pid)     \
-                    and not self.__progress.has_option("BadProfiles",pid)           \
-                    and not self.__progress.has_option("ActiveProfiles",pid):
-                    self.__progress.set("PendingProfiles",pid)
+            for opid in op:
+                if not self.__progress.has_option("PendingProfiles",opid)            \
+                    and not self.__progress.has_option("CompletedProfiles",opid)     \
+                    and not self.__progress.has_option("BadProfiles",opid)           \
+                    and not self.__progress.has_option("ActiveProfiles",opid):
+                    self.__progress.set("PendingProfiles",opid)
 
-            for gid in og:
-                if not self.__progress.has_option("PendingGroups",gid) and  not self.__progress.has_option("CompletedGroups",gid):
-                    self.__progress.set("PendingGroups",gid)
+            for ogid in og:
+                if not self.__progress.has_option("PendingGroups",ogid)              \
+                    and not self.__progress.has_option("CompletedGroups",ogid):
+                    self.__progress.set("PendingGroups",ogid)
  
-            self.__progress.remove_option("ActiveProfiles",pid)
+            if self.__progress.has_option("ActiveProfiles",pid):
+                self.__progress.remove_option("ActiveProfiles",pid)
+            else:
+                raise RuntimeError,"pid [%s] not in ActiveProfiles\n" % pid
             self.__progress.set("CompletedProfiles",pid)
             self.__saveProgress()
 
@@ -324,36 +330,14 @@ class Crawler(object):
             if nextId is not None:
                 #sys.stderr.write("Pending Profiles [%s].\n" % (len(self.__progress.options("PendingProfiles") )))
                 profile     =   CrawlerProfile(nextId)
-                if not profile.load(self.getSession()):
-                    self.__progress.badProfile(nextId)
-                    #self.__progress.set("BadProfiles",profileId,None)
-                else:
+                if profile.load(self.getSession()):
                     op  = profile.getOtherProfiles()
                     og  = profile.getOtherGroups()
-                    #(op,og) = self.examProfile(profileId)
-                    #sys.stderr.write("Other Profiles - %s\n" % op)
-                    #sys.stderr.write("Other Groups   - %s\n" % og)
-                    """
-                    for pid in op:
-                        if not self.__progress.has_option("PendingProfiles",pid) and  not self.__progress.has_option("CompletedProfiles",pid):
-                            self.__progress.set("PendingProfiles",pid,None)
-
-                    for gid in og:
-                        if not self.__progress.has_option("PendingGroups",gid) and  not self.__progress.has_option("CompletedGroups",gid):
-                            self.__progress.set("PendingGroups",gid,None)
-                    """
                     profile.save()
                     del profile
                     self.__progress.completeProfile(nextId,op,og)
-                """
-                self.__progress.remove_option("PendingProfiles",profileId)
-                self.__progress.set("CompletedProfiles",profileId,None)
-                """
-                """
-            elif len(self.__progress.options("PendingGroups")) != 0:
-                pass
-                #sys.stderr.write("Pending Groups [%s].\n" % (len(self.__progress.options("PendingGroups") )))
-                """
+                else:
+                    self.__progress.badProfile(nextId)
             else:
                 sys.stderr.write("No pending work.\n")
                 self.__progress.setExit()
@@ -364,10 +348,6 @@ class Crawler(object):
             sys.stderr.write("Interrupting work.\n")
             self.__progress.setExit()
             return False
-
-
-        
-
 
 class Session(object):
 
@@ -449,6 +429,7 @@ if __name__ == "__main__":
     parser = optparse.OptionParser(usage=usage)
     parser.add_option('-g', '--group', help="group number to test scan", type='int', default=None)
     parser.add_option('-p', '--profile', help="profile number to test scan", type='int', default=None)
+    parser.add_option('-t', '--threads', help="number of threads to spawn", type='int', default=1)
     parser.add_option('-r', '--rebuild', help="rebuild the progress file",action="store_true",default=False)
 
     options, args = parser.parse_args()
@@ -480,18 +461,19 @@ if __name__ == "__main__":
             sys.stderr.write("Starting Crawler [%d]\n" % num)
             while not progress.getExit():
                 crawler.doTick()
-                progress.printProgress()
+                #progress.printProgress()
             sys.stderr.write("Ending Crawler [%d]\n" % num)
 
         progress    =   Progress()
         progress.printProgress()
         threads     =   []
-        for i in range(16):
+        for i in range(options.threads):
             threads.append(Thread(None,target=RunCrawler,args=(i,)))
             threads[-1].start()
         try:
             while True:
-                time.sleep(0.1)
+                time.sleep(10)
+                progress.printProgress()
         except:
             sys.stderr.write("Shutting down from main thread\n")
             progress.setExit()
