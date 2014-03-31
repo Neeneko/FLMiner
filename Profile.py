@@ -42,7 +42,7 @@ class Profile(object):
     def save(self):
         if not os.path.exists("Profiles"):
             os.mkdir("Profiles")
-        fileName = os.path.join("Profiles","-%s.ini" % self.Id)
+        fileName = os.path.join("Profiles","%s.tmp" % self.Id)
 
         config              =   ConfigParser.ConfigParser()
         config.optionxform  =   str
@@ -73,7 +73,7 @@ class Profile(object):
         with open(fileName,'wb') as configFile:
             config.write(configFile)
 
-        os.rename(fileName,os.path.join("Profiles","-%s.ini" % self.Id))
+        os.rename(fileName,os.path.join("Profiles","%s.ini" % self.Id))
 
     def __str__(self):
         rv = "\n"
