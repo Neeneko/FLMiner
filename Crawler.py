@@ -306,7 +306,7 @@ class Progress(object):
         with self.__mutex:
             self.__progress.remove_option("ActiveProfiles",pid)
             self.__progress.set("BadProfiles",pid)
-            self.__saveProgress()
+            #self.__saveProgress()
 
     def completeProfile(self,pid,op,og):
         sys.stderr.write("Completing [%s]\n" % pid)
@@ -328,7 +328,7 @@ class Progress(object):
             else:
                 raise RuntimeError,"pid [%s] not in ActiveProfiles\n" % pid
             self.__progress.set("CompletedProfiles",pid)
-            self.__saveProgress()
+            #self.__saveProgress()
 
     def getCompletedProfiles(self):
         with self.__mutex:
@@ -340,19 +340,23 @@ class Progress(object):
         #    self.__progress.write(fp)
         os.rename(self.__progressTemp,self.__progressFile)
 
+    def saveProgress(self):
+        with self.__mutex:
+            self.__saveProgress()
+
     def printProgress(self):
         with self.__mutex:
-            if self.__nextTime < time.time():
-                self.__rate     =   self.__count
-                self.__count    =   0
-                self.__nextTime = time.time()+60
+            #if self.__nextTime < time.time():
+            #self.__rate     =   self.__count
+            #self.__nextTime = time.time()+60
 
-            sys.stderr.write("Progress: Rate [%d/m] Active [%d] Completed [%8d] Pending [%8d] Bad [%8d]\n" %  (        self.__rate,
+            sys.stderr.write("Progress: Rate [%d] Active [%d] Completed [%8d] Pending [%8d] Bad [%8d]\n" %  (        self.__count,
                 self.__progress.len("ActiveProfiles"),
                 self.__progress.len("CompletedProfiles"),
                 self.__progress.len("PendingProfiles"), 
                 self.__progress.len("BadProfiles")
                 ))
+            self.__count    =   0
 
     def getIds(self,section):
         with self.__mutex:
@@ -523,8 +527,9 @@ if __name__ == "__main__":
             threads[-1].start()
         try:
             while not progress.getExit():
-                time.sleep(10)
+                time.sleep(60)
                 progress.printProgress()
+                progress.saveProgress()
         except:
             sys.stderr.write("Shutting down from main thread\n")
             progress.setExit()
