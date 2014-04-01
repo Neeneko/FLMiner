@@ -221,8 +221,10 @@ class Progress(object):
     def __init__(self,rebuild=False):
         self.__mutex        =   Lock()
         with self.__mutex:
-            self.__progressFile =   os.path.join(session.getDataPath(),"progress.dat")
-            self.__progressTemp =   os.path.join(session.getDataPath(),"progress.tmp")
+
+            self.__dataPath     =   "Data"
+            self.__progressFile =   os.path.join(self.__dataPath,"progress.dat")
+            self.__progressTemp =   os.path.join(self.__dataPath,"progress.tmp")
 
             #self.__progress     =   FastParser(allow_no_value=True)
             #self.__progress.optionxform=str
@@ -351,6 +353,10 @@ class Progress(object):
                 self.__progress.len("PendingProfiles"), 
                 self.__progress.len("BadProfiles")
                 ))
+
+    def getIds(self,section):
+        with self.__mutex:
+            return self.__progress.options(section)
 
 class Crawler(object):
 
@@ -492,7 +498,7 @@ if __name__ == "__main__":
             Progress(True)
     elif options.profile is not None:
         profile = CrawlerProfile(options.profile)
-        if profile.load(crawler.getSession()):
+        if profile.load(session):
             sys.stderr.write("Loaded.  Profiles [%d] Groups [%d]\n" % (len(profile.getOtherProfiles()),len(profile.getOtherGroups())))
             sys.stderr.write(str(profile))
         else:
