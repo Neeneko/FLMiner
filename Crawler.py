@@ -95,7 +95,6 @@ class CrawlerProfile(Profile):
         page    =   session.get(link)
         if page.url != link:
             sys.stderr.write("Bad Profile [%s]\n" % self.Id)
-            #self.__progress.set("BadProfiles",profile.Id,None)
             return False
 
         tree    =   html.fromstring(page.text)
@@ -231,6 +230,11 @@ class Progress(object):
 
             if os.path.exists(self.__progressFile) and not rebuild:       
                 self.__progress = pickle.load( open( self.__progressFile, "rb" ) )
+                sys.stderr.write("Moving [%s] Active back to Pending\n" % self.__progress.len("ActiveProfiles"))
+                while self.__progress.len("ActiveProfiles") != 0:
+                    oldId = self.__progress.pop("ActiveProfiles")
+                    self.__progress.set("PendingProfiles",oldId)
+
                 #self.__progress.read(self.__progressFile)
             else:
                 self.__progress =   FauxParser()
@@ -399,6 +403,11 @@ class Crawler(object):
             sys.stderr.write("Interrupting work.\n")
             self.__progress.setExit()
             return False
+        except Exception:
+            sys.stderr.write("Failed to load profile [%s]\n" % nextId)
+            self.__progress.badProfile(nextId)
+            return True
+
 
 class Session(object):
 
