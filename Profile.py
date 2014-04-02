@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import date
+from datetime import date,datetime
 import ConfigParser
 
 
@@ -8,6 +8,7 @@ class Profile(object):
 
     DEFAULT_ANSWER          =   "No Answer"
     NEVER_ACTIVE            =   "Never"
+    MISSING_CRAWL_DATE      =   "Never"
     GENDER_GROUP_MALE       =   ["M","FtM"]
     GENDER_GROUP_FEMALE     =   ["F","FEM","MtF"]
 
@@ -25,7 +26,8 @@ class Profile(object):
         self.LastActivity   =   Profile.NEVER_ACTIVE
         self.Groups         =   []
         self.Friends        =   []
- 
+        self.CrawlDate      =   Profile.MISSING_CRAWL_DATE
+
     def getOtherProfiles(self):
         return set(self.Friends) | set(self.Relationships.keys())
 
@@ -38,6 +40,20 @@ class Profile(object):
         else:
             splitList = re.split('/',self.LastActivity)
             return date(int(splitList[2]),int(splitList[1]),int(splitList[0]))
+
+    def getCrawlDate(self):
+        if self.CrawlDate == Profile.MISSING_CRAWL_DATE:
+            return date(1970,1,1)
+        else:
+            splitList = re.split('/',self.CrawlDate)
+            return date(int(splitList[2]),int(splitList[1]),int(splitList[0]))
+
+    def setCrawlDate(self,time_stamp=None):
+        if time_stamp is None:
+            now                 =   date.today()
+        else:
+            now = datetime.utcfromtimestamp(time_stamp)
+        self.CrawlDate      =   "%s/%s/%s" % (now.day,now.month,now.year)
 
     def save(self):
         if not os.path.exists("Profiles"):
@@ -54,6 +70,7 @@ class Profile(object):
         config.set("Details","Orientation", self.Orientation)
         config.set("Details","Active",      self.Active)
         config.set("Details","LastActivity",self.LastActivity)
+        config.set("Details","CrawlDate",   self.CrawlDate)
 
         def saveList(name,values):
             config.add_section(name)
@@ -85,6 +102,7 @@ class Profile(object):
         rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Orientation",self.Orientation)
         rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Active",self.Active)
         rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Last Activity",self.LastActivity)
+        rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Crawl Date",self.CrawlDate)
         #-----------------------------------------------
         rv +=   "[%s][%16s]" % (self.Id,"Location")
         if len(self.Location) == 0:

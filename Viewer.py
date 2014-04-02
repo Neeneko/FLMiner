@@ -4,20 +4,20 @@ import webbrowser
 import lxml.html.builder as E
 import lxml.etree
 import ConfigParser
-from datetime import date,timedelta
-from Crawler import Crawler,Session
+import cPickle as Pickle
+from datetime import date,timedelta,datetime
+#from Crawler import Crawler,Session
+from Crawler import Progress,FauxParser
 from Crawler import Profile
 
 class ReportProfile(Profile):
 
-    def load(self):
-        sys.stderr.write("Loading Profile [%s]\n" % self.Id)
-        fileName = os.path.join("Profiles","%s.ini" % self.Id)
-        if not os.path.exists(fileName):
-            return False
+    def __iniLoad(self,file_name):
+        #sys.stderr.write("Loading INI profile\n")
+
         config       =   ConfigParser.ConfigParser()
         config.optionxform=str
-        config.read(fileName)
+        config.read(file_name)
 
         #sys.stderr.write("Sections - [%s]\n" % config.sections())
         self.Name           =   config.get("Details","Name")
@@ -42,7 +42,54 @@ class ReportProfile(Profile):
         self.Groups         =   loadList("Groups")
         self.Friends        =   loadList("Friends")
         self.Relationships  =   loadDict("Relationships")
+ 
+    def __datLoad(self,file_name):
+        with open(file_name,"rb") as fp:
+            for k,v in Pickle.load(fp).iteritems():
+                setattr(self,k,v)
+
+    def __datSave(self,file_name):
+        with open(file_name,"wb") as fp:
+            Pickle.dump(vars(self),fp)
+
+    def load(self):
+        #TODO - if ini, load ini and write dat.  if dat load dat
+        #sys.stderr.write("Loading Profile [%s]\n" % self.Id)
+        iniName = os.path.join("Profiles","%s.ini" % self.Id)
+        datName = os.path.join("Profiles","%s.dat" % self.Id)
+        if os.path.exists(iniName):
+            self.__iniLoad(iniName)
+            #sys.stderr.write("Starting Fix\n")
+            #sys.stderr.write("Last Activity [%s]\n" % self.LastActivity)
+            with open(iniName,"r") as fp:
+                timeStamp = os.fstat(fp.fileno()).st_ctime
+            self.setCrawlDate(timeStamp)
+            #sys.stderr.write("Fix Last [%s] Crawl [%s]\n" % (self.getLastActivity(),self.getCrawlDate()))
+            #sys.stderr.write("Done Fix\n")
+            self.__datSave(datName)
+            os.unlink(iniName)
+
+            #Quick test
+            newProfile = ReportProfile(self.Id)
+            newProfile.load()
+            #sys.stderr.write("New Last [%s] Crawl [%s]\n" % (newProfile.getLastActivity(),newProfile.getCrawlDate()))
+
+        elif os.path.exists(datName):
+            self.__datLoad(datName)
+        else:
+            return False
+        
         return True
+
+class ReportMultiGraph(object):
+
+    def __init__(self):
+        self.Graphs             =   []
+        self.Labels             =   []
+
+    def addGraph(self,label,graph):
+        self.Labels.append(label)
+        self.Graphs.append(graph)
 
 class ReportGraph(object):
 
@@ -87,6 +134,67 @@ class ReportManager(object):
                 rv += 32
             else:
                 rv += 16
+
+    def __buildMultiChart(self,label,charts):
+        sys.stderr.write("Building hchart for [%s]\n" % label)
+        reportCharts    =   []
+
+        yValues =   []
+        xMax    =   2
+        #for arg in args[1:]:
+        #    reportCharts.append(arg)
+        reportCharts    =   charts.Graphs
+
+        sliceSize   =   10
+        chunkSize   =   sliceSize*len(reportCharts)
+
+        for z in range(len(reportCharts)):
+            yValues = set(yValues) | set(reportCharts[z].getKeys())
+            for key in reportCharts[z].getKeys():
+                xValue  =   reportCharts[z].getValue(key)
+                if reportCharts[z].isStacked():
+                    for zz in reportCharts[z:]:
+                        xValue += zz.getValue(key)
+                xMax    =   max(xMax,xValue)
+        xMax    =   self.__nextPowerOfTwo(xMax)
+
+        if len(yValues) == 0:
+            return E.DIV(E.H2(args[0]),E.SPAN("No Data"))
+
+        yValues =   sorted(yValues,reverse=True)
+        yMin    =   yValues[0]
+        yMax    =   yValues[-1]
+
+        chartArgs   =   [E.CLASS("hBarGraph")]
+        chartKwargs =   {"style":"height: %spx" % ((chunkSize*len(yValues)))}
+
+        idx = 0
+        labelRange  =   yValues
+
+        for y in labelRange:
+            chartArgs.append(E.LI("  %s  " % y,E.CLASS("p0"),style="width: 100%%; color: #000; bottom: %spx;" % (chunkSize*idx)))
+            for z in range(len(reportCharts)):
+                value   =   reportCharts[z].getValue(y)
+                if value == 0:
+                    x       =   0
+                    value   =   ""
+                else:
+                    x       =   80.0 * float(value)/float(xMax)
+                chartArgs.append(E.LI("%s" % value,E.CLASS("p%d" % (z+1)),style="width: %s%%; bottom: %spx; height: %spx; line-height: %spx;" % (x,(chunkSize*idx)+(z*sliceSize),sliceSize,sliceSize)))
+            idx += 1
+        chart       =   E.UL(*chartArgs,**chartKwargs)
+
+        legendArgs   =   [E.CLASS("hBarGraph")]
+        legendKwargs =   {"style":"height: 64px"}
+        for i in range(len(charts.Labels)):
+            legendArgs.append(E.H3(charts.Labels[i],E.CLASS("p%d" % (i+1))))
+        legend      =   E.DIV(*legendArgs,**legendKwargs)
+
+        return E.DIV(E.H2(label),legend,chart)
+
+
+
+
     def __buildHorizontalChart(self,*args):
         assert isinstance(args[0],basestring)
         sys.stderr.write("Building hchart for [%s]\n" % args[0])
@@ -159,6 +267,11 @@ class ReportManager(object):
             v = data["Charts"][k]
             chartArgs.append(self.__buildHorizontalChart(k,v))
 
+        for k in sorted(data["MultiCharts"].keys()):
+            v = data["MultiCharts"][k]
+            chartArgs.append(self.__buildMultiChart(k,v))
+
+
 
         html    =   E.HTML(
                         E.HEAD( 
@@ -191,21 +304,25 @@ class ReportManager(object):
   
 
 if __name__ == "__main__":
-    session         =   Session()
-    crawler         =   Crawler(session)
+    progress        =   Progress()
     maxProfile      =   sys.maxint
+    #maxProfile      =   4096
     reportData                      =   {}
     reportData["AllProfiles"]       =   []
     reportData["ActiveProfiles"]    =   []
-    reportData["pids"]  =   crawler.getCompletedProfiles() 
-    for pid in reportData["pids"]:
-        profile =   ReportProfile(pid)
+    reportData["pids"]  =   list(progress.getIds("CompletedProfiles"))
+    sys.stderr.write("Profiles to load: [%s]\n" % min(maxProfile,len(reportData["pids"])))
+    for idx in range(len(reportData["pids"])):
+        if idx%1024 == 0:
+            sys.stderr.write("Progress - Loaded [%s]\n" % idx)
+        profile =   ReportProfile(reportData["pids"][idx])
         if(profile.load()):
             #sys.stderr.write("%s\n" % str(profile))
             reportData["AllProfiles"].append(profile)
-            now     =   date.today()
+            #TODO - read file timestamp, not 'today'
+            crawl   =   profile.getCrawlDate()
             last    =   profile.getLastActivity()
-            delta   =   now-last
+            delta   =   crawl-last
             if delta.days < 30:
                 reportData["ActiveProfiles"].append(profile)
 
@@ -214,39 +331,58 @@ if __name__ == "__main__":
             break
 
     reportData["Charts"]                        =   {}
-    reportData["Charts"]["Age"]                 =   ReportGraph()
     reportData["Charts"]["Gender"]              =   ReportGraph()
-    reportData["Charts"]["Type - All"]          =   ReportGraph()
-    reportData["Charts"]["Type - Male"]         =   ReportGraph()
-    reportData["Charts"]["Type - Female"]       =   ReportGraph()
-    reportData["Charts"]["Type - Other"]        =   ReportGraph()
-    reportData["Charts"]["LookingFor"]          =   ReportGraph()
-    reportData["Charts"]["Relationship Types"]  =   ReportGraph()
-    reportData["Charts"]["Relationship Count"]  =   ReportGraph()
-    reportData["Charts"]["Orientation"]         =   ReportGraph()
-    reportData["Charts"]["Active"]              =   ReportGraph()
-    
-    for profile in reportData["ActiveProfiles"]:
-        reportData["Charts"]["Age"].incValue(int(profile.Age),1)   
-        reportData["Charts"]["Gender"].incValue(profile.Gender,1)
-        reportData["Charts"]["Type - All"].incValue(profile.Type,1)
-        if profile.Gender in Profile.GENDER_GROUP_MALE:
-            reportData["Charts"]["Type - Male"].incValue(profile.Type,1)
-        elif profile.Gender in Profile.GENDER_GROUP_FEMALE:
-            reportData["Charts"]["Type - Female"].incValue(profile.Type,1)
-        else:
-            reportData["Charts"]["Type - Other"].incValue(profile.Type,1) 
-        for value in profile.LookingFor:
-            reportData["Charts"]["LookingFor"].incValue(value,1)
-        for value in profile.Relationships.values():
-            reportData["Charts"]["Relationship Types"].incValue(value,1)
-        reportData["Charts"]["Relationship Count"].incValue(len(profile.Relationships),1)
-        reportData["Charts"]["Orientation"].incValue(profile.Orientation,1)
-        reportData["Charts"]["Active"].incValue(profile.Active,1)
- 
+    multiChartNames                             =   [
+                                                        "Type",
+                                                        "Age",
+                                                        "LookingFor",
+                                                        "Relationship Types",
+                                                        "Count - Relationships",
+                                                        #"Count - Friends",
+                                                        #"Count - Groups",
+                                                        "Orientation",
+                                                        "Active"
+                                                    ]
+    genderNames                                 =   ["Female","Male","Other"]
 
-   
+    tempCharts                                  =   {}
+    for name in multiChartNames:
+        tempCharts[name]                        =   {}
+        for genderName in genderNames:
+            tempCharts[name][genderName]        =   ReportGraph()
+ 
+    for profile in reportData["ActiveProfiles"]:
+        reportData["Charts"]["Gender"].incValue(profile.Gender,1)
+        if profile.Gender in Profile.GENDER_GROUP_MALE:
+            gender  =   "Male"
+        elif profile.Gender in Profile.GENDER_GROUP_FEMALE:
+            gender  =   "Female"
+        elif profile.Gender == "No Answer":
+            gender  =   None
+        else:
+            gender  =   "Other"
+
+        if gender != None:
+
+            for value in profile.LookingFor:
+                tempCharts["LookingFor"][gender].incValue(value,1)
+
+            for value in profile.Relationships.values():
+                tempCharts["Relationship Types"][gender].incValue(value,1)
+
+            tempCharts["Age"][gender].incValue(int(profile.Age),1)   
+            tempCharts["Type"][gender].incValue(profile.Type,1)
+            tempCharts["Count - Relationships"][gender].incValue(len(profile.Relationships),1)
+            #tempCharts["Count - Friends"][gender].incValue(len(profile.Friends),1)
+            #tempCharts["Count - Groups"][gender].incValue(len(profile.Groups),1)
+            tempCharts["Orientation"][gender].incValue(profile.Orientation,1)
+            tempCharts["Active"][gender].incValue(profile.Active,1)
+
+    reportData["MultiCharts"]                   =   {}
+    for name in multiChartNames:
+        reportData["MultiCharts"][name]         =   ReportMultiGraph()
+        for gender in genderNames:
+            reportData["MultiCharts"][name].addGraph(gender,tempCharts[name][gender]) 
     reportManager   =   ReportManager()
     reportManager.writeReport(reportData)
     reportManager.displayReport()
-

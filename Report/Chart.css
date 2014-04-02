@@ -82,6 +82,13 @@ ul.xAxis li{
 .hBarGraph li.p3{ background-color:Green }
 .hBarGraph li.p4{ background-color:Yellow }
 
+.hBarGraph h3.p1{ color:Red }
+.hBarGraph h3.p2{ color:Blue }
+.hBarGraph h3.p3{ color:Green }
+.hBarGraph h3.p4{ color:Yellow }
+
+
+
 }
 
 table,th,td{
