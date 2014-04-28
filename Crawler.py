@@ -194,48 +194,50 @@ class CrawlerProfile(Profile):
         #---------------------------------------------------
         stringMap   =   StringMap()
         stuff       =   tree.xpath('//em[text()="Into:"]/ancestor::p')
-        #sys.stderr.write("Into [%s]\n" % stuff)
-        intoList    =   []
-        for item in stuff[0]:
-            if item.text is None:
-                continue
-            #sys.stderr.write("\t[%s][%s]\n" % (item,item.text))
-            if "href" in item.keys():
-                fetishName          =   item.text
-                fetishId            =   int(re.sub(r'[^0-9 ]','', item.get("href")))
-                intoList.append( [fetishId,None] )
-                if not stringMap.hasString("Fetish",fetishId):
-                    stringMap.addString("Fetish",fetishId,fetishName)
-            else:
-                intoList[-1][1]  =   item.text[1:-1]
+        if len(stuff) != 0:
+            #sys.stderr.write("Into [%s]\n" % stuff)
+            intoList    =   []
+            for item in stuff[0]:
+                if item.text is None:
+                    continue
+                #sys.stderr.write("\t[%s][%s]\n" % (item,item.text))
+                if "href" in item.keys():
+                    fetishName          =   item.text
+                    fetishId            =   int(re.sub(r'[^0-9 ]','', item.get("href")))
+                    intoList.append( [fetishId,None] )
+                    if not stringMap.hasString("Fetish",fetishId):
+                        stringMap.addString("Fetish",fetishId,fetishName)
+                else:
+                    intoList[-1][1]  =   item.text[1:-1]
 
-        #sys.stderr.write("\n%s\n" % intoList)
-        for (k,v) in intoList:
-            if v not in self.Into:
-                self.Into[v] =   set()
-            self.Into[v].add(k)
+            #sys.stderr.write("\n%s\n" % intoList)
+            for (k,v) in intoList:
+                if v not in self.Into:
+                    self.Into[v] =   set()
+                self.Into[v].add(k)
 
         stuff      =   tree.xpath('//em[text()="Curious about:"]/ancestor::p')
+        if len(stuff) != 0:
         #sys.stderr.write("Curious About [%s]\n" % stuff)
-        curiousList =   []
-        for item in stuff[0]:
-            if item.text is None:
-                continue
-            #sys.stderr.write("\t[%s][%s] - [%s]\n" % (item,item.text,item.keys()))
-            if "href" in item.keys():
-                fetishName          =   item.text
-                fetishId            =   int(re.sub(r'[^0-9 ]','', item.get("href")))
-                curiousList.append( [fetishId,None] )
-                if not stringMap.hasString("Fetish",fetishId):
-                    stringMap.addString("Fetish",fetishId,fetishName)
-            else:
-                curiousList[-1][1]  =   item.text[1:-1]
+            curiousList =   []
+            for item in stuff[0]:
+                if item.text is None:
+                    continue
+                #sys.stderr.write("\t[%s][%s] - [%s]\n" % (item,item.text,item.keys()))
+                if "href" in item.keys():
+                    fetishName          =   item.text
+                    fetishId            =   int(re.sub(r'[^0-9 ]','', item.get("href")))
+                    curiousList.append( [fetishId,None] )
+                    if not stringMap.hasString("Fetish",fetishId):
+                        stringMap.addString("Fetish",fetishId,fetishName)
+                else:
+                    curiousList[-1][1]  =   item.text[1:-1]
 
-        #sys.stderr.write("\n%s\n" % curiousList)
-        for (k,v) in curiousList:
-            if v not in self.Curious:
-                self.Curious[v] =   set()
-            self.Curious[v].add(k)
+            #sys.stderr.write("\n%s\n" % curiousList)
+            for (k,v) in curiousList:
+                if v not in self.Curious:
+                    self.Curious[v] =   set()
+                self.Curious[v].add(k)
 
         #---------------------------------------------------
         # Now, friends
