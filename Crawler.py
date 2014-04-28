@@ -17,6 +17,51 @@ from Profile import Profile
 from multiprocessing import Process, Lock
 from threading import Thread
 
+class StringMap(object):
+
+    __instance  =   None
+    class   __impl:
+
+        def __init__(self):
+            self.__dataPath     =   "Data"
+            self.__stringsFile  =   os.path.join(self.__dataPath,"strings.dat")
+            self.__stringsTemp  =   os.path.join(self.__dataPath,"strings.tmp")
+
+            if os.path.exists(self.__stringsFile):       
+                self.__sections =   pickle.load( open( self.__stringsFile, "rb" ) )
+            else:
+                self.__sections =   {}
+
+        def __save(self):
+            pickle.dump( self.__sections, open(self.__stringsTemp, "wb" ) )
+            os.rename(self.__stringsTemp,self.__stringsFile)
+
+        def addString(self,section,key,value):
+            if section not in self.__sections:
+                self.__sections[section]    =   {}
+            self.__sections[section][key]  =   value
+            self.__save()
+
+        def hasString(self,section,key):
+            if section in self.__sections and key in self.__sections[section]:
+                return True
+            else:
+                return False
+
+
+    def __init__(self):
+        if StringMap.__instance is None:
+            StringMap.__instance = StringMap.__impl()
+
+    def __getattr__(self, attr):
+        return getattr(self.__instance, attr)
+
+    def __setattr__(self, attr, value):
+        return setattr(self.__instance, attr, value)
+
+
+
+
 class FastParser(ConfigParser.ConfigParser):
 
     def options(self, section):
@@ -83,18 +128,14 @@ class CrawlerProfile(Profile):
 
         self.LastActivity = "%s/%s/%s" % (then.day,then.month,then.year)
 
-   def load(self,session):
+   def fill(self,session):
         sys.stderr.write("Loading Profile [%s]\n" % self.Id)
-        try:
-            int(self.Id)
-        except ValueError:
-            sys.stderr.write("\tNot a profile id\n")
-            return False
+        assert isinstance(self.Id,int)
         #profile =   Profile(profile_id)
         link    =   "https://fetlife.com/users/%s" % self.Id
         page    =   session.get(link)
         if page.url != link:
-            sys.stderr.write("Bad Profile [%s]\n" % self.Id)
+            sys.stderr.write("Missing Profile [%s]\n" % self.Id)
             return False
 
         tree    =   html.fromstring(page.text)
@@ -104,10 +145,11 @@ class CrawlerProfile(Profile):
         splitList       =   re.split(" ",rawPair)
         if len(splitList) > 1:
             self.Type    =   splitList[1]
-        self.Age         =   re.sub(r'[^0-9]','', splitList[0])
+        self.Age         =   int(re.sub(r'[^0-9]','', splitList[0]))
         if self.Age != splitList[0]:
-            self.Gender      =   re.sub(r'[0-9 ]','', splitList[0])
-        self.Location    =   tree.xpath('//div[@class="span-13 append-1"]/p/em/a/text()')
+            self.Gender     =   re.sub(r'[0-9 ]','', splitList[0])
+        Location            =   tree.xpath('//div[@class="span-13 append-1"]/p/em/a/text()')
+        self.Location       =   [str(x) for x in Location]
         table               =   tree.xpath('//div[@class="span-13 append-1"]/table/tr')
 
         #sys.stderr.write("Table\n")
@@ -125,9 +167,9 @@ class CrawlerProfile(Profile):
                         a =  li.getchildren()[0]
                         url =   a.get("href")
                         rel =   li.text.strip()
-                        pid =   re.sub(r'[^0-9 ]','', url)
+                        pid =   int(re.sub(r'[^0-9 ]','', url))
 
-                        self.Relationships[pid]  =   rel
+                        self.Relationships.append(tuple([pid,rel]))
             elif header.text == "orientation:":
                 assert len(children[1:]) == 1
                 td = children[1]
@@ -147,20 +189,57 @@ class CrawlerProfile(Profile):
         lastActive  =   tree.xpath('//ul[@id="mini_feed"]/li/span[@class="quiet small"]/text()')
         if len(lastActive) != 0:
             self.setLastActive(lastActive[0])
+        #---------------------------------------------------
+        # Fetishes
+        #---------------------------------------------------
+        stringMap   =   StringMap()
+        stuff       =   tree.xpath('//em[text()="Into:"]/ancestor::p')
+        #sys.stderr.write("Into [%s]\n" % stuff)
+        intoList    =   []
+        for item in stuff[0]:
+            if item.text is None:
+                continue
+            #sys.stderr.write("\t[%s][%s]\n" % (item,item.text))
+            if "href" in item.keys():
+                fetishName          =   item.text
+                fetishId            =   int(re.sub(r'[^0-9 ]','', item.get("href")))
+                intoList.append( [fetishId,None] )
+                if not stringMap.hasString("Fetish",fetishId):
+                    stringMap.addString("Fetish",fetishId,fetishName)
+            else:
+                intoList[-1][1]  =   item.text[1:-1]
 
-        #sys.stderr.write("Last Active [%s]\n" % lastActive)
-        urls      =   tree.xpath('//div[@class="span-5 append-1 small"]/ul/li/a/@href')
+        #sys.stderr.write("\n%s\n" % intoList)
+        for (k,v) in intoList:
+            if v not in self.Into:
+                self.Into[v] =   set()
+            self.Into[v].add(k)
 
-        for url in urls:
-            if "group" in url:
-                group = re.sub(r'[^0-9 ]','',  url)
-                self.Groups.append(group)
+        stuff      =   tree.xpath('//em[text()="Curious about:"]/ancestor::p')
+        #sys.stderr.write("Curious About [%s]\n" % stuff)
+        curiousList =   []
+        for item in stuff[0]:
+            if item.text is None:
+                continue
+            #sys.stderr.write("\t[%s][%s] - [%s]\n" % (item,item.text,item.keys()))
+            if "href" in item.keys():
+                fetishName          =   item.text
+                fetishId            =   int(re.sub(r'[^0-9 ]','', item.get("href")))
+                curiousList.append( [fetishId,None] )
+                if not stringMap.hasString("Fetish",fetishId):
+                    stringMap.addString("Fetish",fetishId,fetishName)
+            else:
+                curiousList[-1][1]  =   item.text[1:-1]
+
+        #sys.stderr.write("\n%s\n" % curiousList)
+        for (k,v) in curiousList:
+            if v not in self.Curious:
+                self.Curious[v] =   set()
+            self.Curious[v].add(k)
 
         #---------------------------------------------------
         # Now, friends
         #---------------------------------------------------
-
-
         pageNum =   1
         while True:
             page    =   session.get("https://fetlife.com/users/%s/friends?page=%d" % (self.Id,pageNum))
@@ -168,7 +247,7 @@ class CrawlerProfile(Profile):
         
             urls =   tree.xpath('//div[@class="clearfix user_in_list"]/div/a/@href')
             for url in urls:
-                friend =  re.sub(r'[^0-9 ]','', url)
+                friend =  int(re.sub(r'[^0-9 ]','', url))
                 self.Friends.append(friend)
 
             next    =   tree.xpath('//a[@class="next_page"]')
@@ -177,13 +256,16 @@ class CrawlerProfile(Profile):
             else:
                 break
 
+
+
         #sys.stderr.write(str(profile))
         #profile.save()
         #del profile
+        self.setCrawlDate()
         sys.stderr.write("Done Loading Profile [%s]\n" % self.Id)
 
         return True
-
+#TODO - make sure uids and gids are int, not string!
 class FauxParser(object):
 
     def __init__(self):
@@ -215,6 +297,12 @@ class FauxParser(object):
     def pop(self,section):
         return self.__sections[section].pop()
 
+    def sections(self):
+        return self.__sections.keys()
+
+    def set_section(self,section,values):
+        self.__sections[section] = set(values)
+
 class Progress(object):
 
     def __init__(self,rebuild=False):
@@ -224,29 +312,22 @@ class Progress(object):
             self.__dataPath     =   "Data"
             self.__progressFile =   os.path.join(self.__dataPath,"progress.dat")
             self.__progressTemp =   os.path.join(self.__dataPath,"progress.tmp")
-
-            #self.__progress     =   FastParser(allow_no_value=True)
-            #self.__progress.optionxform=str
-
             if os.path.exists(self.__progressFile) and not rebuild:       
                 self.__progress = pickle.load( open( self.__progressFile, "rb" ) )
                 sys.stderr.write("Moving [%s] Active back to Pending\n" % self.__progress.len("ActiveProfiles"))
                 while self.__progress.len("ActiveProfiles") != 0:
                     oldId = self.__progress.pop("ActiveProfiles")
                     self.__progress.set("PendingProfiles",oldId)
-
-                #self.__progress.read(self.__progressFile)
             else:
                 self.__progress =   FauxParser()
-                self.__progress.add_section("PendingGroups")
                 self.__progress.add_section("PendingProfiles")
-                self.__progress.add_section("BadProfiles")
-                self.__progress.add_section("GroupsProfiles")
-                self.__progress.add_section("CompletedGroups")
+                self.__progress.add_section("ErrorProfiles")
+                self.__progress.add_section("MissingProfiles")
                 self.__progress.add_section("CompletedProfiles")
-                self.__progress.add_section("BadGroups")
                 self.__progress.add_section("ActiveProfiles")
                 self.__saveProgress()
+
+
             self.__exit     =   False
             self.__count    =   0
             self.__rate     =   0
@@ -257,11 +338,21 @@ class Progress(object):
             self.printProgress()
             self.__saveProgress()
 
+    def validate(self):
+        for sectionName in self.__progress.sections():
+            for value in self.__progress.options(sectionName):
+                if not isinstance(value,int):
+                    return False
+        return True
+
+    def fix(self):
+        for sectionName in self.__progress.sections():
+            self.__progress.set_section(sectionName,[ int(x) for x in self.__progress.options(sectionName)])
     def initPending(self,pid):
         self.__progress.clear()
         self.__progress.set("PendingProfiles",pid)
         self.__saveProgress()
- 
+    """
     def __rebuild(self):
         sys.stderr.write("Starting Rebuild\n")
         self.__progress.clear()
@@ -289,7 +380,7 @@ class Progress(object):
                     sys.stderr.write("[%s]\n" % idx)
 
         sys.stderr.write("Done Rebuild\n")
-
+        """
     def setExit(self):
         sys.stderr.write("Shutting Down\n")
         self.__exit =   True
@@ -306,27 +397,29 @@ class Progress(object):
             self.__progress.set("ActiveProfiles",rv)
             return rv 
 
-    def badProfile(self,pid):
+    def errorProfile(self,pid):
         with self.__mutex:
             self.__progress.remove_option("ActiveProfiles",pid)
-            self.__progress.set("BadProfiles",pid)
+            self.__progress.set("ErrorProfiles",pid)
             #self.__saveProgress()
 
-    def completeProfile(self,pid,op,og):
+    def missingProfile(self,pid):
+        with self.__mutex:
+            self.__progress.remove_option("ActiveProfiles",pid)
+            self.__progress.set("MissingProfiles",pid)
+ 
+
+    def completeProfile(self,pid,op):
         sys.stderr.write("Completing [%s]\n" % pid)
         with self.__mutex:
             for opid in op:
                 if not self.__progress.has_option("PendingProfiles",opid)            \
                     and not self.__progress.has_option("CompletedProfiles",opid)     \
-                    and not self.__progress.has_option("BadProfiles",opid)           \
+                    and not self.__progress.has_option("ErrorProfiles",opid)         \
+                    and not self.__progress.has_option("MissingProfiles",opid)       \
                     and not self.__progress.has_option("ActiveProfiles",opid):
                     self.__progress.set("PendingProfiles",opid)
 
-            for ogid in og:
-                if not self.__progress.has_option("PendingGroups",ogid)              \
-                    and not self.__progress.has_option("CompletedGroups",ogid):
-                    self.__progress.set("PendingGroups",ogid)
- 
             if self.__progress.has_option("ActiveProfiles",pid):
                 self.__progress.remove_option("ActiveProfiles",pid)
             else:
@@ -340,8 +433,6 @@ class Progress(object):
         
     def __saveProgress(self):
         pickle.dump( self.__progress, open(self.__progressTemp, "wb" ) )
-        #with open(self.__progressTemp,'wb') as fp:
-        #    self.__progress.write(fp)
         os.rename(self.__progressTemp,self.__progressFile)
 
     def saveProgress(self):
@@ -354,11 +445,12 @@ class Progress(object):
             #self.__rate     =   self.__count
             #self.__nextTime = time.time()+60
 
-            sys.stderr.write("Progress: Rate [%d] Active [%d] Completed [%8d] Pending [%8d] Bad [%8d]\n" %  (        self.__count,
+            sys.stderr.write("Progress: Rate [%d] Active [%d] Completed [%8d] Pending [%8d] Error [%8d] Missing [%8d]\n" %  (        self.__count,
                 self.__progress.len("ActiveProfiles"),
                 self.__progress.len("CompletedProfiles"),
                 self.__progress.len("PendingProfiles"), 
-                self.__progress.len("BadProfiles")
+                self.__progress.len("ErrorProfiles"),
+                self.__progress.len("MissingProfiles")
                 ))
             self.__count    =   0
 
@@ -374,9 +466,6 @@ class Crawler(object):
 
     def getSession(self):
         return self.__session
-
-    def examGroup(self,group_id):
-        raise NotImplementedError
  
     def doTick(self):
         try:
@@ -385,14 +474,13 @@ class Crawler(object):
             if nextId is not None:
                 #sys.stderr.write("Pending Profiles [%s].\n" % (len(self.__progress.options("PendingProfiles") )))
                 profile     =   CrawlerProfile(nextId)
-                if profile.load(self.getSession()):
+                if profile.fill(self.getSession()):
                     op  = profile.getOtherProfiles()
-                    og  = profile.getOtherGroups()
                     profile.save()
                     del profile
-                    self.__progress.completeProfile(nextId,op,og)
+                    self.__progress.completeProfile(nextId,op)
                 else:
-                    self.__progress.badProfile(nextId)
+                    self.__progress.missingProfile(nextId)
             else:
                 sys.stderr.write("No pending work.\n")
                 self.__progress.setExit()
@@ -405,7 +493,7 @@ class Crawler(object):
             return False
         except Exception:
             sys.stderr.write("Failed to load profile [%s]\n" % nextId)
-            self.__progress.badProfile(nextId)
+            self.__progress.errorProfile(nextId)
             return True
 
 
@@ -462,8 +550,6 @@ class Session(object):
         page    =   self.__session.get("http://fetlife.com/login")
         tree    =   html.fromstring(page.text)
         token   =   tree.xpath('//div[@id="authenticity_token"]/text()')[0]
-        #sys.stderr.write("Token [%s]\n" % token)
-
 
         payload =   {
                         "authenticity_token":   token,
@@ -474,7 +560,8 @@ class Session(object):
                     }
         payloadStr  =   urllib.urlencode(payload)
         payloadStr  +=  "&utf8=%E2%9C%93"
-        #sys.stderr.write("%s\n" % payloadStr)
+        sys.stderr.write("%s\n" % payloadStr)
+
 
         page    =   self.__session.post("https://fetlife.com/session",data=payloadStr)
         if self.isLoggedIn():
@@ -487,16 +574,11 @@ class Session(object):
 if __name__ == "__main__":
     usage       =   "usage: %prog [options]"
     parser = optparse.OptionParser(usage=usage)
-    parser.add_option('-g', '--group', help="group number to test scan", type='int', default=None)
     parser.add_option('-p', '--profile', help="profile number to test scan", type='int', default=None)
     parser.add_option('-t', '--threads', help="number of threads to spawn", type='int', default=1)
     parser.add_option('-r', '--rebuild', help="rebuild the progress file",action="store_true",default=False)
 
     options, args = parser.parse_args()
-
-    if options.profile is not None and options.group is not None:
-        sys.stderr.write("Please select profile or group, but not both\n")
-        sys.exit()
 
     session =   Session()
     if not session.doLogin():
@@ -507,24 +589,28 @@ if __name__ == "__main__":
         if options.profile is not None:
             progress = Progress()
             progress.initPending(options.profile)
+            progress.printProgress()
         else:
             Progress(True)
     elif options.profile is not None:
         profile = CrawlerProfile(options.profile)
-        if profile.load(session):
-            sys.stderr.write("Loaded.  Profiles [%d] Groups [%d]\n" % (len(profile.getOtherProfiles()),len(profile.getOtherGroups())))
+        if profile.fill(session):
+            sys.stderr.write("Loaded.  Other Profiles [%d]\n" % (len(profile.getOtherProfiles())))
             sys.stderr.write(str(profile))
+            sys.stderr.write("Valid : [%s]\n" % profile.validate())
+            profile.save()
+            profile.load()
+            sys.stderr.write("Valid : [%s]\n" % profile.validate())
         else:
             sys.stderr.write("Failed\n")
-    elif options.group is not None:
-        crawler     =   Crawler(session,progress)
-        crawler.examGroup("%s" % options.group)
     else:
         def RunCrawler(num):
             crawler     =   Crawler(session,progress)
             sys.stderr.write("Starting Crawler [%d]\n" % num)
             while not progress.getExit():
+                sys.stderr.write("Tick\n")
                 crawler.doTick()
+                sys.stderr.write("/Tick\n")
             sys.stderr.write("Ending Crawler [%d]\n" % num)
             progress.setExit()
 

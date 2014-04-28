@@ -1,6 +1,7 @@
 import os
 import re
 from datetime import date,datetime
+import cPickle as Pickle
 import ConfigParser
 
 
@@ -13,26 +14,25 @@ class Profile(object):
     GENDER_GROUP_FEMALE     =   ["F","FEM","MtF"]
 
     def __init__(self,pid):
-        self.Id             =   pid
+        self.Id             =   int(pid)
         self.Name           =   None
         self.Age            =   None
         self.Gender         =   Profile.DEFAULT_ANSWER
         self.Type           =   Profile.DEFAULT_ANSWER
         self.Location       =   []
-        self.Relationships  =   {}
+        self.Relationships  =   []
         self.LookingFor     =   []
         self.Orientation    =   None
         self.Active         =   Profile.DEFAULT_ANSWER
         self.LastActivity   =   Profile.NEVER_ACTIVE
-        self.Groups         =   []
         self.Friends        =   []
         self.CrawlDate      =   Profile.MISSING_CRAWL_DATE
+        self.Degree         =   None
+        self.Into           =   {}
+        self.Curious        =   {}
 
     def getOtherProfiles(self):
-        return set(self.Friends) | set(self.Relationships.keys())
-
-    def getOtherGroups(self):
-        return self.Groups
+        return set(self.Friends) | set([x for (x,_) in self.Relationships])
 
     def getLastActivity(self):
         if self.LastActivity == Profile.NEVER_ACTIVE:
@@ -59,38 +59,38 @@ class Profile(object):
         if not os.path.exists("Profiles"):
             os.mkdir("Profiles")
         fileName = os.path.join("Profiles","%s.tmp" % self.Id)
+        with open(fileName,"wb") as fp:
+            Pickle.dump(vars(self),fp)
+        os.rename(fileName,os.path.join("Profiles","%s.dat" % self.Id))
 
-        config              =   ConfigParser.ConfigParser()
-        config.optionxform  =   str
-        config.add_section("Details")
-        config.set("Details","Name",        self.Name.encode('ascii','ignore'))
-        config.set("Details","Age",         self.Age)
-        config.set("Details","Gender",      self.Gender)
-        config.set("Details","Type",        self.Type)
-        config.set("Details","Orientation", self.Orientation)
-        config.set("Details","Active",      self.Active)
-        config.set("Details","LastActivity",self.LastActivity)
-        config.set("Details","CrawlDate",   self.CrawlDate)
+    def load(self):
+        fileName = os.path.join("Profiles","%s.dat" % self.Id)
+        if os.path.exists(fileName):
+            with open(fileName,"rb") as fp:
+                for k,v in Pickle.load(fp).iteritems():
+                    setattr(self,k,v)
+            return True
+        else:
+            return False
 
-        def saveList(name,values):
-            config.add_section(name)
-            for value in values:
-                config.set(name,value.encode('ascii','ignore').strip(),"")
+    def validate(self):
+        for k,v in vars(self).iteritems():
+            try:
+                Pickle.dumps(v)
+            except TypeError:
+                return "No, Picle Failed : Field [%s] Value [%s]\n" % (k,v)
 
-        def saveDict(name,values):
-            config.add_section(name)
-            for k,v in values.iteritems():
-                config.set(name,k.encode('ascii','ignore').strip(),v.encode('ascii','ignore').strip() )
-
-        saveList("Location",self.Location)
-        saveList("LookingFor",self.LookingFor)
-        saveList("Groups",self.Groups)
-        saveList("Friends",self.Friends)
-        saveDict("Relationships",self.Relationships)
-        with open(fileName,'wb') as configFile:
-            config.write(configFile)
-
-        os.rename(fileName,os.path.join("Profiles","%s.ini" % self.Id))
+        for k,v in self.Relationships:
+            if not isinstance(k,int):
+                return "No,  Relationship k [%s]\n" % k
+            if not isinstance(v,basestring):
+                return "No,  Relationship v [%s]\n" % v
+ 
+        for k in self.Friends:
+             if not isinstance(k,int):
+                return "No,  Friend k [%s]\n" % k
+ 
+        return "Yes"
 
     def __str__(self):
         rv = "\n"
@@ -121,7 +121,7 @@ class Profile(object):
             rv += "\n"
         else:
             first   =   True
-            for k,v in self.Relationships.iteritems():
+            for k,v in self.Relationships:
                 if not first:
                     rv += "[%s] %16s " % (self.Id,"")
                 else:
@@ -140,18 +140,6 @@ class Profile(object):
                     first = False
                 rv += "[%32s]\n" % (k)
         #-----------------------------------------------
-        rv +=   "[%s][%16s]" % (self.Id,"Groups")
-        if len(self.Groups) == 0:
-            rv += "\n"
-        else:
-            first   =   True
-            for k in self.Groups:
-                if not first:
-                    rv += "[%s] %16s " % (self.Id,"")
-                else:
-                    first = False
-                rv += "[%32s]\n" % (k)
-
         rv +=   "[%s][%16s]" % (self.Id,"Friends")
         if len(self.Friends) == 0:
             rv += "\n"
@@ -163,7 +151,52 @@ class Profile(object):
                 else:
                     first = False
                 rv += "[%32s]\n" % (k)
- 
+        #-----------------------------------------------
+        rv +=   "[%s][%16s]" % (self.Id,"Into")
+        if len(self.Into) == 0:
+            rv += "\n"
+        else:
+            first   =   True
+            for k,v in self.Into.iteritems():
+                if not first:
+                    rv += "[%s] %16s " % (self.Id,"")
+                else:
+                    first = False
+                rv += "[%32s]" % k
+                firstTwo    =   True
+                for vv in v:
+                    if not firstTwo:
+                        rv += "[%s] %16s  %32s " % (self.Id,"","")
+                    else:
+                        firstTwo = False
+                    rv += "[%16s]\n" % (vv)
+        #-----------------------------------------------
+        rv +=   "[%s][%16s]" % (self.Id,"Curious")
+        if len(self.Curious) == 0:
+            rv += "\n"
+        else:
+            first   =   True
+            for k,v in self.Curious.iteritems():
+                if not first:
+                    rv += "[%s] %16s " % (self.Id,"")
+                else:
+                    first = False
+                rv += "[%32s]" % k
+                firstTwo    =   True
+                for vv in v:
+                    if not firstTwo:
+                        rv += "[%s] %16s  %32s " % (self.Id,"","")
+                    else:
+                        firstTwo = False
+                    rv += "[%16s]\n" % (vv)
+        #-----------------------------------------------
         rv += "\n"
+        #-----------------------------------------------
+        #rv +=   "[%s][%16s]" % (self.Id,"Curious About")
+        #if len(self.Curious) == 0:
+        #    rv += "\n"
+        #else:
+ 
         return rv
+
 
