@@ -620,12 +620,14 @@ if __name__ == "__main__":
         progress    =   Progress()
         progress.printProgress()
         progress.resetErrorProfiles()
+        progress.saveProgress()
         progress.printProgress()
         crawler     =   Crawler(session,progress,True)
         sys.stderr.write("Starting Crawler\n")
         while not progress.getExit():
             crawler.doTick()
         sys.stderr.write("Ending Crawler\n")
+        progress.saveProgress()
         progress.setExit()
 
 
