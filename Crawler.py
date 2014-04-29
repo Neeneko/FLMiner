@@ -340,6 +340,11 @@ class Progress(object):
             self.printProgress()
             self.__saveProgress()
 
+    def resetErrorProfiles(self):
+        while self.__progress.len("ErrorProfiles") != 0:
+            oldId = self.__progress.pop("ErrorProfiles")
+            self.__progress.set("PendingProfiles",oldId)
+
     def validate(self):
         for sectionName in self.__progress.sections():
             for value in self.__progress.options(sectionName):
@@ -462,9 +467,10 @@ class Progress(object):
 
 class Crawler(object):
 
-    def __init__(self,session,progress):
-        self.__session      =   session
-        self.__progress     =   progress
+    def __init__(self,session,progress,raise_on_failure=False):
+        self.__session          =   session
+        self.__progress         =   progress
+        self.__raiseOnFailure   =   raise_on_failure
 
     def getSession(self):
         return self.__session
@@ -496,6 +502,9 @@ class Crawler(object):
         except Exception:
             sys.stderr.write("Failed to load profile [%s]\n" % nextId)
             self.__progress.errorProfile(nextId)
+            if self.__raiseOnFailure:
+                self.__progress.setExit()
+                raise
             return True
 
 
@@ -579,6 +588,7 @@ if __name__ == "__main__":
     parser.add_option('-p', '--profile', help="profile number to test scan", type='int', default=None)
     parser.add_option('-t', '--threads', help="number of threads to spawn", type='int', default=1)
     parser.add_option('-r', '--rebuild', help="rebuild the progress file",action="store_true",default=False)
+    parser.add_option('-e', '--error', help="re-examine the error pages",action="store_true",default=False)
 
     options, args = parser.parse_args()
 
@@ -605,6 +615,21 @@ if __name__ == "__main__":
             sys.stderr.write("Valid : [%s]\n" % profile.validate())
         else:
             sys.stderr.write("Failed\n")
+    elif options.error is True:
+        sys.stderr.write("Examining Error List\n")
+        progress    =   Progress()
+        progress.printProgress()
+        progress.resetErrorProfiles()
+        progress.printProgress()
+        crawler     =   Crawler(session,progress,True)
+        sys.stderr.write("Starting Crawler\n")
+        while not progress.getExit():
+            crawler.doTick()
+        sys.stderr.write("Ending Crawler\n")
+        progress.setExit()
+
+
+
     else:
         def RunCrawler(num):
             crawler     =   Crawler(session,progress)
