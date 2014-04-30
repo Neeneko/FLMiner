@@ -149,7 +149,7 @@ class CrawlerProfile(Profile):
         if self.Age != splitList[0]:
             self.Gender     =   re.sub(r'[0-9 ]','', splitList[0])
         Location            =   tree.xpath('//div[@class="span-13 append-1"]/p/em/a/text()')
-        self.Location       =   [str(x) for x in Location]
+        self.Location       =   [unicode(x) for x in Location]
         table               =   tree.xpath('//div[@class="span-13 append-1"]/table/tr')
 
         #sys.stderr.write("Table\n")
@@ -608,7 +608,7 @@ if __name__ == "__main__":
         profile = CrawlerProfile(options.profile)
         if profile.fill(session):
             sys.stderr.write("Loaded.  Other Profiles [%d]\n" % (len(profile.getOtherProfiles())))
-            sys.stderr.write(str(profile))
+            sys.stderr.write(unicode(profile))
             sys.stderr.write("Valid : [%s]\n" % profile.validate())
             profile.save()
             profile.load()
