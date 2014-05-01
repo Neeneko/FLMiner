@@ -207,7 +207,7 @@ class CrawlerProfile(Profile):
                     intoList.append( [fetishId,None] )
                     if not stringMap.hasString("Fetish",fetishId):
                         stringMap.addString("Fetish",fetishId,fetishName)
-                else:
+                elif len(intoList) > 0:
                     intoList[-1][1]  =   item.text[1:-1]
 
             #sys.stderr.write("\n%s\n" % intoList)
@@ -230,7 +230,7 @@ class CrawlerProfile(Profile):
                     curiousList.append( [fetishId,None] )
                     if not stringMap.hasString("Fetish",fetishId):
                         stringMap.addString("Fetish",fetishId,fetishName)
-                else:
+                elif len(curiousList) > 0:
                     curiousList[-1][1]  =   item.text[1:-1]
 
             #sys.stderr.write("\n%s\n" % curiousList)
