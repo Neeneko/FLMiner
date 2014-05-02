@@ -11,6 +11,7 @@ import getpass
 import time
 import glob
 import cPickle as pickle
+import traceback
 from datetime import date,timedelta
 from lxml import html
 from Profile import Profile
@@ -130,6 +131,7 @@ class CrawlerProfile(Profile):
 
    def fill(self,session):
         sys.stderr.write("Loading Profile [%s]\n" % self.Id)
+        raise RuntimeError
         assert isinstance(self.Id,int)
         #profile =   Profile(profile_id)
         link    =   "https://fetlife.com/users/%s" % self.Id
@@ -499,8 +501,9 @@ class Crawler(object):
             sys.stderr.write("Interrupting work.\n")
             self.__progress.setExit()
             return False
-        except Exception:
-            sys.stderr.write("Failed to load profile [%s]\n" % nextId)
+        except Exception,e:
+            sys.stderr.write("Failed to load profile [%s].\n" % (nextId))
+            traceback.print_exc(sys.stderr)
             self.__progress.errorProfile(nextId)
             if self.__raiseOnFailure:
                 self.__progress.setExit()
