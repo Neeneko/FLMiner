@@ -24,52 +24,45 @@ class StringMap(object):
     class   __impl:
 
         def __init__(self):
-            self.__dataPath     =   "Data"
-            self.__stringsFile  =   os.path.join(self.__dataPath,"strings.dat")
-            self.__stringsTemp  =   os.path.join(self.__dataPath,"strings.tmp")
+            self.__mutex        =   Lock()
+            with self.__mutex:
+                self.__dataPath     =   "Data"
+                self.__stringsFile  =   os.path.join(self.__dataPath,"strings.dat")
+                self.__stringsTemp  =   os.path.join(self.__dataPath,"strings.tmp")
 
-            if os.path.exists(self.__stringsFile):       
-                self.__sections =   pickle.load( open( self.__stringsFile, "rb" ) )
-            else:
-                self.__sections =   {}
+                if os.path.exists(self.__stringsFile):       
+                    self.__sections =   pickle.load( open( self.__stringsFile, "rb" ) )
+                else:
+                    self.__sections =   {}
 
         def __save(self):
             pickle.dump( self.__sections, open(self.__stringsTemp, "wb" ) )
             os.rename(self.__stringsTemp,self.__stringsFile)
 
         def addString(self,section,key,value):
-            if section not in self.__sections:
-                self.__sections[section]    =   {}
-            self.__sections[section][key]  =   value
-            self.__save()
+            with self.__mutex:
+                if section not in self.__sections:
+                    self.__sections[section]    =   {}
+                self.__sections[section][key]  =   value
+                self.__save()
 
         def hasString(self,section,key):
-            if section in self.__sections and key in self.__sections[section]:
-                return True
-            else:
-                return False
+            with self.__mutex:
+                if section in self.__sections and key in self.__sections[section]:
+                    return True
+                else:
+                    return False
 
 
     def __init__(self):
-        self.__mutex        =   Lock()
-        with self.__mutex:
-            if StringMap.__instance is None:
+           if StringMap.__instance is None:
                 StringMap.__instance = StringMap.__impl()
 
     def __getattr__(self, attr):
-        if attr == "_StringMap__mutex":
-            return super(StringMap,self).__getattr__(attr)
-        with self.__mutex:
-            return getattr(self.__instance, attr)
+        return getattr(self.__instance, attr)
 
     def __setattr__(self, attr, value):
-        if attr == "_StringMap__mutex":
-            return super(StringMap,self).__setattr__(attr,value)
-        with self.__mutex:
-            return setattr(self.__instance, attr, value)
-
-
-
+        return setattr(self.__instance, attr, value)
 
 class FastParser(ConfigParser.ConfigParser):
 
