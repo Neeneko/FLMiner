@@ -131,7 +131,6 @@ class CrawlerProfile(Profile):
 
    def fill(self,session):
         sys.stderr.write("Loading Profile [%s]\n" % self.Id)
-        raise RuntimeError
         assert isinstance(self.Id,int)
         #profile =   Profile(profile_id)
         link    =   "https://fetlife.com/users/%s" % self.Id
