@@ -39,12 +39,15 @@ class StringMap(object):
             pickle.dump( self.__sections, open(self.__stringsTemp, "wb" ) )
             os.rename(self.__stringsTemp,self.__stringsFile)
 
+        def save(self):
+            with self.__mutex:
+                self.__save()
+
         def addString(self,section,key,value):
             with self.__mutex:
                 if section not in self.__sections:
                     self.__sections[section]    =   {}
                 self.__sections[section][key]  =   value
-                self.__save()
 
         def hasString(self,section,key):
             with self.__mutex:
@@ -647,6 +650,7 @@ if __name__ == "__main__":
             progress.setExit()
 
         progress    =   Progress()
+        stringMap   =   StringMap()
         progress.printProgress()
         threads     =   []
         for i in range(options.threads):
@@ -657,6 +661,7 @@ if __name__ == "__main__":
                 time.sleep(60)
                 progress.printProgress()
                 progress.saveProgress()
+                stringMap.save()
         except:
             sys.stderr.write("Shutting down from main thread\n")
             progress.setExit()
