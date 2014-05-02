@@ -51,14 +51,22 @@ class StringMap(object):
 
 
     def __init__(self):
-        if StringMap.__instance is None:
-            StringMap.__instance = StringMap.__impl()
+        self.__mutex        =   Lock()
+        with self.__mutex:
+            if StringMap.__instance is None:
+                StringMap.__instance = StringMap.__impl()
 
     def __getattr__(self, attr):
-        return getattr(self.__instance, attr)
+        if attr == "_StringMap__mutex":
+            return super(StringMap,self).__getattr__(attr)
+        with self.__mutex:
+            return getattr(self.__instance, attr)
 
     def __setattr__(self, attr, value):
-        return setattr(self.__instance, attr, value)
+        if attr == "_StringMap__mutex":
+            return super(StringMap,self).__setattr__(attr,value)
+        with self.__mutex:
+            return setattr(self.__instance, attr, value)
 
 
 
