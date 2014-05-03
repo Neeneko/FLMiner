@@ -10,22 +10,26 @@ from datetime import date,timedelta,datetime
 #from Crawler import Crawler,Session
 from Crawler import Progress,FauxParser
 from Profile import Profile
-from Blobber import GetBlob
-from Report import ReportManager,ReportData,MultiGraph,SimpleGraph
+from Blobber import LoadBlob,DataBlob
+from Report import ReportManager,ReportData,MultiGraph,SimpleGraph,PercentHeatMap
+from NetworkBuilder import clearNetwork,buildNetwork
 
 if __name__ == "__main__":
     usage       =   "usage: %prog [options]"
     parser = optparse.OptionParser(usage=usage)
-    parser.add_option('-b', '--blob', help="user the blob rather then loading profiles", action="store_true",default=False)
+    parser.add_option('-b', '--blob', help="user the blob rather then loading profiles", action="store",default=None)
 
     options, args = parser.parse_args()
 
     if options.blob:
-        sys.stderr.write("Loading Blob\n")
-        profileMap  =   GetBlob()
+        sys.stderr.write("Loading Blob [%s]\n" % options.blob)
+        dataBlob    =   LoadBlob(options.blob)
+        profileMap  =   dataBlob.getProfiles()
+        progress    =   dataBlob.getProgress()
+        sys.stderr.write("Loaded [%d] Profiles\n" % len(profileMap))
     else:
         sys.stderr.write("Loading Profiles\n")
-        maxProfile      =   sys.maxint
+        maxProfile  =   sys.maxint
         progress    =   Progress()
         uids        =   set(progress.getIds("CompletedProfiles"))
         profileMap  =   {}
@@ -172,6 +176,7 @@ if __name__ == "__main__":
     reportData.Graphs.append(SimpleGraph("Profiles"))
     reportData.Graphs[-1].setValue("All",len(reportData.AllProfiles))
     reportData.Graphs[-1].setValue("Active",len(reportData.ActiveProfiles))
+    reportData.Graphs[-1].setValue("Missing",len(progress.getIds("MissingProfiles")))
 
     multiChartNames                             =   [
                                                         #"Type",
@@ -194,6 +199,16 @@ if __name__ == "__main__":
     genderGraphs["Ident"]   =   MultiGraph("Identity By Gender")  
     genderGraphs["Ident"].setVertical(False)
 
+    genderGraphs["Look"]   =   MultiGraph("Looking For By Gender")  
+    genderGraphs["Look"].setVertical(False)
+    genderGraphs["Active"] =   MultiGraph("Actvity Type By Gender")  
+    genderGraphs["Active"].setVertical(False)
+    genderGraphs["RType"]  =   MultiGraph("Relationship Type By Gender")  
+    genderGraphs["RType"].setVertical(False)
+
+
+
+
     for profile in reportData.ActiveProfiles:
         genderGraph.incValue(profile.Gender,1)
         if profile.Gender in Profile.GENDER_GROUP_MALE:
@@ -211,9 +226,30 @@ if __name__ == "__main__":
             genderGraphs["Ident"].incValue(gender,profile.Type,1)
 
 
+            genderGraphs["Active"].incValue(gender,profile.Active,1)
+
+            for value in profile.LookingFor:
+                genderGraphs["Look"].incValue(gender,value,1)
+
+            for (_,value) in profile.Relationships:
+                genderGraphs["RType"].incValue(gender,value,1)
+    sys.stderr.write("Building HeatMaps\n")
+    clearNetwork(profileMap)
+    buildNetwork(profileMap,1)
+    womenHeat   = PercentHeatMap("Percent Women from %s" % profileMap[1].Name)
+    for profile in reportData.ActiveProfiles:
+        if profile.Degree == 0 or profile.Degree == None:
+            continue
+        womenHeat.incTotal(profile.Degree,profile.Age,1)
+        if profile.Gender in Profile.GENDER_GROUP_FEMALE:
+            womenHeat.incValue(profile.Degree,profile.Age,1)
+
+    sys.stderr.write("Done Heatmaps\n")
+
     reportData.Graphs.append(genderGraph)
     for v in genderGraphs.values():
         reportData.Graphs.append(v)
+    reportData.Graphs.append(womenHeat)
     reportManager   =   ReportManager()
     reportManager.writeReport(reportData)
     reportManager.displayReport()

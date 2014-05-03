@@ -1,11 +1,11 @@
 import optparse
 import sys
-from Profile import ReportProfile
+from Profile import Profile
 from Crawler import Progress,FauxParser
-from Blobber import GetBlob,SaveBlob
+from Blobber import LoadBlob,SaveBlob
 
-def clearDegrees(profiles):
-    sys.stderr.write("Clearing Degree\n")
+def clearNetwork(profiles):
+    sys.stderr.write("Clearing Network\n")
     reset   =   0
     added   =   0
     for profile in profiles.itervalues():
@@ -35,6 +35,7 @@ def spiderFix(profiles,profile):
                 pending.add(other)
                
 def buildNetwork(profiles,origin):
+    sys.stderr.write("Building Network from [%s]\n" % origin)
     profiles[origin].Degree =   0
     pending                 =   set( [profiles[origin]] )
     complete                =   0
@@ -106,7 +107,7 @@ if __name__ == "__main__":
         for uid in uids:
             if count%1024 == 0:
                 sys.stderr.write("Progress - Loaded [%s]\n" % count)
-            profile =   ReportProfile(uid)
+            profile =   Profile(uid)
             if(profile.load()):
                 profileMap[uid] =   profile
             count += 1

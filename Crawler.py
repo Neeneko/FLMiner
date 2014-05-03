@@ -312,14 +312,15 @@ class FauxParser(object):
 
 class Progress(object):
 
-    def __init__(self,rebuild=False):
+    def __init__(self,rebuild=False,raw_data=None):
         self.__mutex        =   Lock()
-        with self.__mutex:
-
+        with self.__mutex:            
             self.__dataPath     =   "Data"
             self.__progressFile =   os.path.join(self.__dataPath,"progress.dat")
             self.__progressTemp =   os.path.join(self.__dataPath,"progress.tmp")
-            if os.path.exists(self.__progressFile) and not rebuild:       
+            if raw_data is not None:
+                self.__progress = raw_data
+            elif os.path.exists(self.__progressFile) and not rebuild:       
                 self.__progress = pickle.load( open( self.__progressFile, "rb" ) )
                 sys.stderr.write("Moving [%s] Active back to Pending\n" % self.__progress.len("ActiveProfiles"))
                 while self.__progress.len("ActiveProfiles") != 0:
@@ -334,7 +335,6 @@ class Progress(object):
                 self.__progress.add_section("ActiveProfiles")
                 self.__saveProgress()
 
-
             self.__exit     =   False
             self.__count    =   0
             self.__rate     =   0
@@ -344,6 +344,9 @@ class Progress(object):
             self.__rebuild()
             self.printProgress()
             self.__saveProgress()
+
+    def getRawData(self):
+        return self.__progress
 
     def resetErrorProfiles(self):
         while self.__progress.len("ErrorProfiles") != 0:

@@ -34,13 +34,41 @@ class MultiGraph(object):
         self.__data[z][key]     +=  value
 
     def getValue(self,cat,key):
-        return self.__data[cat].get(key,0)
+        return self.__data.get(cat,{}).get(key,0)
 
     def getCats(self):
         return self.__data.keys()
 
     def getKeys(self):
         return self.__keys
+
+class PercentHeatMap(object):
+
+    def __init__(self,title):
+        self.__title = title
+        self.__values   =   MultiGraph("Values")
+        self.__totals   =   MultiGraph("Totals")
+        
+    def getTitle(self):
+        return self.__title
+
+    def incValue(self,cat,key,value):
+        self.__values.incValue(cat,key,value)
+
+    def incTotal(self,cat,key,value):
+        self.__totals.incValue(cat,key,value)
+
+    def getCatRange(self):
+        return range(min(min(self.__values.getCats()),min(self.__totals.getCats())),max(max(self.__values.getCats()),max(self.__totals.getCats())))
+
+    def getKeyRange(self):
+        return range(min(min(self.__values.getKeys()),min(self.__totals.getKeys())),max(max(self.__values.getKeys()),max(self.__totals.getKeys())))
+
+    def getValue(self,cat,key):
+        if self.__totals.getValue(cat,key) == 0:
+            return 0
+        else:
+            return int(100.0 * self.__values.getValue(cat,key)/self.__totals.getValue(cat,key))
 
 class SimpleGraph(object):
 
@@ -71,8 +99,7 @@ class SimpleGraph(object):
 class ReportData(object):
 
     def __init__(self):
-        self.Graphs     =   []
-        self.HeatMaps       =   []
+        self.Graphs         =   []
         self.AllProfiles    =   []
         self.ActiveProfiles =   []
 
@@ -101,7 +128,7 @@ class ReportManager(object):
     def writeReport(self,data):
         log("Initing matplotlib")
         import numpy
-        from matplotlib import pyplot
+        from matplotlib import pyplot,colors
         from matplotlib.backends.backend_pdf import PdfPages
         log("Done Init")
 
@@ -153,6 +180,58 @@ class ReportManager(object):
 
                 pyplot.barh(y_pos, values, align='center', alpha=0.4, color=colours)
                 pyplot.yticks(y_pos, keys)
+                pyplot.title(graph.getTitle())
+            elif isinstance(graph,PercentHeatMap):
+                pyplot.rc('xtick', labelsize=6) 
+                pyplot.rc('xtick', labelsize=6) 
+                sys.stderr.write("Starting Heat Map [%s]\n" % graph.getTitle())
+                catRange    =   graph.getCatRange()
+                keyRange    =   graph.getKeyRange()
+                sys.stderr.write("catRange [%s]\n" % catRange)
+                sys.stderr.write("keyRange [%s]\n" % keyRange)
+                fig, ax =   pyplot.subplots()
+                data    =   numpy.random.randn(len(catRange),len(keyRange))
+                for c in catRange:
+                    for k in keyRange:
+                        i   =   c-catRange[0]
+                        j   =   k-keyRange[0]
+                        data[i][j]  =   graph.getValue(c,k)
+                """
+                cdict = {'red':  (      (0.0,  1.0,  1.0),
+                                        (1.0,  0.9,  1.0) ),
+                        'green':(       (0.0,  1.0,  1.0),
+                                        (1.0,  0.03, 0.0) ),
+                        'blue': (       (0.0,  1.0,  1.0),
+                                        (1.0,  0.16, 0.0) ) }
+                """
+                cdict = {'red':  (      (0.0,   0.0,  1.0),
+                                        (0.0,  1.0,  0.0),
+                                        (0.5,   0.0,  0.0), 
+                                        (1.0,   1.0,  1.0) ),
+                        'green':(       (0.0,   0.0,  1.0),
+                                        (0.0,  1.0,  0.0),
+                                        (1.0,   0.0,  0.0) ),
+                        'blue': (       (0.0,   0.0,  1.0),
+                                        (0.0,  1.0,  1.0),
+                                        (0.5,   0.0,  0.0), 
+                                        (1.0,   0.0,  0.0) ) }
+
+
+                colorMap    =   colors.LinearSegmentedColormap("custom",cdict)
+                p = ax.pcolormesh(data,cmap=colorMap)
+                evenKeys    =   []
+                for idx in range(len(keyRange)):
+                    if keyRange[idx]%2 == 0:
+                        evenKeys.append(keyRange[idx])
+                    else:
+                        evenKeys.append("")
+                ax.set_xticks(numpy.arange(len(evenKeys)))
+                ax.set_xticklabels( evenKeys )
+                ax.set_yticks(numpy.arange(len(catRange)))
+                ax.set_yticklabels( catRange )
+ 
+
+                fig.colorbar(p)
                 pyplot.title(graph.getTitle())
             elif isinstance(graph,MultiGraph) and graph.getVertical():
                 keys    =   sorted(graph.getKeys())
