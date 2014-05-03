@@ -59,6 +59,8 @@ if __name__ == "__main__":
             profile =   Profile(uid)
             if(profile.load()):
                 profileMap[uid] =   profile
+            else:
+                progress.errorProfile(uid)
             count += 1
         sys.stderr.write("Loaded [%d] Profiles\n" % len(profileMap))
     
