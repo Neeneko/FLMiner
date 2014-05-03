@@ -318,9 +318,23 @@ class Progress(object):
             self.__dataPath     =   "Data"
             self.__progressFile =   os.path.join(self.__dataPath,"progress.dat")
             self.__progressTemp =   os.path.join(self.__dataPath,"progress.tmp")
+            self.__exit     =   False
+            self.__count    =   0
+            self.__rate     =   0
+            self.__nextTime = time.time()+60
             if raw_data is not None:
                 self.__progress = raw_data
-            elif os.path.exists(self.__progressFile) and not rebuild:       
+            elif rebuild is True:
+                self.__progress =   FauxParser()
+                self.__progress.add_section("PendingProfiles")
+                self.__progress.add_section("ErrorProfiles")
+                self.__progress.add_section("MissingProfiles")
+                self.__progress.add_section("CompletedProfiles")
+                self.__progress.add_section("ActiveProfiles")
+                self.__rebuild()
+                self.__printProgress()
+                self.__saveProgress()
+            elif os.path.exists(self.__progressFile):       
                 self.__progress = pickle.load( open( self.__progressFile, "rb" ) )
                 sys.stderr.write("Moving [%s] Active back to Pending\n" % self.__progress.len("ActiveProfiles"))
                 while self.__progress.len("ActiveProfiles") != 0:
@@ -334,16 +348,6 @@ class Progress(object):
                 self.__progress.add_section("CompletedProfiles")
                 self.__progress.add_section("ActiveProfiles")
                 self.__saveProgress()
-
-            self.__exit     =   False
-            self.__count    =   0
-            self.__rate     =   0
-            self.__nextTime = time.time()+60
-
-        if rebuild:
-            self.__rebuild()
-            self.printProgress()
-            self.__saveProgress()
 
     def getRawData(self):
         return self.__progress
@@ -367,35 +371,44 @@ class Progress(object):
         self.__progress.clear()
         self.__progress.set("PendingProfiles",pid)
         self.__saveProgress()
-    """
+
     def __rebuild(self):
         sys.stderr.write("Starting Rebuild\n")
         self.__progress.clear()
-        fileNames = glob.glob(os.path.join("Profiles","*.ini"))
+        fileNames = glob.glob(os.path.join("Profiles","*.dat"))
         if len(fileNames) == 0:
             sys.stderr.write("No Data, defaulting.\n")
             self.__progress.set("PendingProfiles",1)
         else:
-            for idx in range(len(fileNames)):
-                fileName    =   fileNames[idx]
-                pid         =   re.sub(r'[^0-9]','', fileName)
-                self.__progress.set("CompletedProfiles",pid)
-
-            for idx in range(len(fileNames)):
-                fileName    =   fileNames[idx]
-                pid         =   re.sub(r'[^0-9]','', fileName)
-                config      =   ConfigParser.ConfigParser()
-                config.optionxform=str
-                config.read(fileName)
-                for k in config.options("Friends") + config.options("Relationships"):
-                    if not self.__progress.has_option("CompletedProfiles",k) \
-                        and not self.__progress.has_option("PendingProfiles",k):
-                        self.__progress.set("PendingProfiles",k)
-                if idx%256 == 0:
-                    sys.stderr.write("[%s]\n" % idx)
+            profiles        =   set()
+            count           =   0
+            for fileName in fileNames:
+                if count%1024 == 0:
+                    sys.stderr.write("[0] Progress - Loaded [%s]\n" % count)
+                uid         =   re.sub(r'[^0-9]','', fileName)
+                profile =   Profile(uid)
+                if(profile.load()):
+                    profiles.add(profile)
+                    self.__progress.set("CompletedProfiles",uid)
+                else:
+                    self.errorProfile(uid)
+                count += 1
+            
+            count           =   0
+            for profile in profiles:
+                if count%1024 == 0:
+                    sys.stderr.write("[1] Progress - Processed [%s]\n" % count)
+                for opid in profile.getOtherProfiles():
+                    if not self.__progress.has_option("PendingProfiles",opid)            \
+                        and not self.__progress.has_option("CompletedProfiles",opid)     \
+                        and not self.__progress.has_option("ErrorProfiles",opid)         \
+                        and not self.__progress.has_option("MissingProfiles",opid)       \
+                        and not self.__progress.has_option("ActiveProfiles",opid):
+                        self.__progress.set("PendingProfiles",opid)
+                count += 1
 
         sys.stderr.write("Done Rebuild\n")
-        """
+
     def setExit(self):
         sys.stderr.write("Shutting Down\n")
         self.__exit =   True
@@ -458,18 +471,21 @@ class Progress(object):
 
     def printProgress(self):
         with self.__mutex:
+            self.__printProgress()
             #if self.__nextTime < time.time():
             #self.__rate     =   self.__count
             #self.__nextTime = time.time()+60
 
-            sys.stderr.write("Progress: Rate [%d] Active [%d] Completed [%8d] Pending [%8d] Error [%8d] Missing [%8d]\n" %  (        self.__count,
+    def __printProgress(self):
+        sys.stderr.write("Progress: Rate [%d] Active [%d] Completed [%8d] Pending [%8d] Error [%8d] Missing [%8d]\n" %  (        self.__count,
                 self.__progress.len("ActiveProfiles"),
                 self.__progress.len("CompletedProfiles"),
                 self.__progress.len("PendingProfiles"), 
                 self.__progress.len("ErrorProfiles"),
                 self.__progress.len("MissingProfiles")
                 ))
-            self.__count    =   0
+        self.__count    =   0
+
 
     def getIds(self,section):
         with self.__mutex:
