@@ -411,13 +411,15 @@ class Progress(object):
 
     def errorProfile(self,pid):
         with self.__mutex:
-            self.__progress.remove_option("ActiveProfiles",pid)
+            if pid in self.__progress.options("ActiveProfiles"):
+                self.__progress.remove_option("ActiveProfiles",pid)
             self.__progress.set("ErrorProfiles",pid)
             #self.__saveProgress()
 
     def missingProfile(self,pid):
         with self.__mutex:
-            self.__progress.remove_option("ActiveProfiles",pid)
+            if pid in self.__progress.options("ActiveProfiles"):
+                self.__progress.remove_option("ActiveProfiles",pid)
             self.__progress.set("MissingProfiles",pid)
  
 

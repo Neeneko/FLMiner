@@ -1,5 +1,7 @@
 import os
 import re
+import sys
+import traceback
 from datetime import date,datetime
 import cPickle as Pickle
 import ConfigParser
@@ -58,18 +60,24 @@ class Profile(object):
     def save(self):
         if not os.path.exists("Profiles"):
             os.mkdir("Profiles")
-        fileName = os.path.join("Profiles","%s.tmp" % self.Id)
+        fileName = os.path.join("Profiles","%s.dat" % self.Id)
         with open(fileName,"wb") as fp:
             Pickle.dump(vars(self),fp)
-        os.rename(fileName,os.path.join("Profiles","%s.dat" % self.Id))
+            fp.flush()
+            os.fsync(fp.fileno())
 
     def load(self):
         fileName = os.path.join("Profiles","%s.dat" % self.Id)
         if os.path.exists(fileName):
-            with open(fileName,"rb") as fp:
-                for k,v in Pickle.load(fp).iteritems():
-                    setattr(self,k,v)
-            return True
+            try:
+                with open(fileName,"rb") as fp:
+                    for k,v in Pickle.load(fp).iteritems():
+                        setattr(self,k,v)
+                return True
+            except Exception:
+                sys.stderr.write("Failed to load profile [%s]\n" % self.Id)
+                traceback.print_exc(sys.stderr)
+                return False
         else:
             return False
 
