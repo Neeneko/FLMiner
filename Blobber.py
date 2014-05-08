@@ -19,38 +19,37 @@ class ProfileDb(object):
             cursor.execute("DROP TABLE IF EXISTS %s" % section)
             cursor.execute("CREATE TABLE %s(Id INT)" % section)
 
-            cursor.execute("DROP TABLE IF EXISTS Profiles")
-            createString    =   "CREATE TABLE Profiles ("
-            createString += "Id INTEGER PRIMARY KEY,"
-            for field in Profile.INT_FIELDS:
-                if field == "Id":
-                    continue
-                createString += "%s INT," % field
+        cursor.execute("DROP TABLE IF EXISTS Profiles")
+        createString    =   "CREATE TABLE Profiles ("
+        createString += "Id INTEGER PRIMARY KEY,"
+        for field in Profile.INT_FIELDS:
+            if field == "Id":
+                continue
+            createString += "%s INT," % field
 
-            for field in Profile.TEXT_FIELDS:
-                createString += "%s TEXT," % field
+        for field in Profile.TEXT_FIELDS:
+            createString += "%s TEXT," % field
 
-            for field in Profile.DATE_FIELDS:
-                createString += "%s DATE," % field
+        for field in Profile.DATE_FIELDS:
+            createString += "%s DATE," % field
 
-            createString += "GenderGroup TEXT)"
-            cursor.execute(createString)
+        createString += "GenderGroup TEXT)"
+        cursor.execute(createString)
 
-            cursor.execute("DROP TABLE IF EXISTS Enums")
-            cursor.execute("CREATE TABLE Enums (Enum INT, Value TEXT, Origin TEXT)")
+        cursor.execute("DROP TABLE IF EXISTS Enums")
+        cursor.execute("CREATE TABLE Enums (Enum INT, Value TEXT, Origin TEXT)")
 
-            for field in Profile.LIST_FIELDS:
-                cursor.execute("DROP TABLE IF EXISTS %s" % field)
-                cursor.execute("CREATE TABLE %s(Id INT, Enum INT)" % (field))
+        for field in Profile.LIST_FIELDS:
+            cursor.execute("DROP TABLE IF EXISTS %s" % field)
+            cursor.execute("CREATE TABLE %s(Id INT, Enum INT)" % (field))
 
-            for field in Profile.LIST_TUPLE_FIELDS:
+        for field in Profile.LIST_TUPLE_FIELDS:
+            cursor.execute("DROP TABLE IF EXISTS %s" % field)
+            cursor.execute("CREATE TABLE %s(Id INT, DstId INT, Enum INT)" % (field))
 
-                cursor.execute("DROP TABLE IF EXISTS %s" % field)
-                cursor.execute("CREATE TABLE %s(Id INT, DstId INT, Enum INT)" % (field))
-
-            for field in Profile.FETISH_FIELDS:
-                cursor.execute("DROP TABLE IF EXISTS Fetish%s" % field)
-                cursor.execute("CREATE TABLE Fetish%s(Id INT, Fetish INT, Enum INT)" % (field))
+        for field in Profile.FETISH_FIELDS:
+            cursor.execute("DROP TABLE IF EXISTS Fetish%s" % field)
+            cursor.execute("CREATE TABLE Fetish%s(Id INT, Fetish INT, Enum INT)" % (field))
 
         self.__db.commit()
 
@@ -173,7 +172,7 @@ class ProfileDb(object):
         for field in Profile.LIST_TUPLE_FIELDS:
             for (dst,text) in getattr(profile,field):
                 if text not in [ x[1] for x in enumRows]:
-                    sys.stderr.write("Enum [%s] not in DB, Adding\n" % text)
+                    sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
                     if len(enumRows) == 0:
                         nextId  =   0   
                     else:
@@ -191,7 +190,7 @@ class ProfileDb(object):
         for field in Profile.LIST_FIELDS:
             for text in getattr(profile,field):
                 if text not in [ x[1] for x in enumRows]:
-                    sys.stderr.write("Enum [%s] not in DB, Adding\n" % text)
+                    sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
                     if len(enumRows) == 0:
                         nextId  =   0   
                     else:
@@ -209,7 +208,7 @@ class ProfileDb(object):
         for field in Profile.FETISH_FIELDS:
             for (text,values) in getattr(profile,field).iteritems():
                 if text not in [ x[1] for x in enumRows]:
-                    sys.stderr.write("Enum [%s] not in DB, Adding\n" % text)
+                    sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
                     if len(enumRows) == 0:
                         nextId  =   0   
                     else:
@@ -249,7 +248,7 @@ def CreateLiveBlob(file_name):
             progress.errorProfile(uid)
         del profile
         count += 1
-    sys.stderr.write("Loaded [%d] Profiles\n" % count)
+    sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (len(profileDb.GetAllProfileIds()),len(progress.getIds("ErrorProfiles"))))
     return profileDb
  
 def CreateMemoryOnlyBlob():
