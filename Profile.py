@@ -14,6 +14,16 @@ class Profile(object):
     MISSING_CRAWL_DATE      =   "Never"
     GENDER_GROUP_MALE       =   ["M","FtM"]
     GENDER_GROUP_FEMALE     =   ["F","FEM","MtF"]
+    GENDER_MALE_TITLE       =   "Male"
+    GENDER_FEMALE_TITLE     =   "Female"
+    GENDER_OTHER_TITLE      =   "Other"
+
+    INT_FIELDS              =   ["Id","Age","Degree"]
+    TEXT_FIELDS             =   ["Name","Gender","Type","Orientation","Active"]
+    DATE_FIELDS             =   ["LastActivity","CrawlDate"]
+    LIST_FIELDS             =   ["Location","LookingFor"]
+    FETISH_FIELDS           =   ["Into","Curious"]
+    LIST_TUPLE_FIELDS       =   ["Relationships"]
 
     def __init__(self,pid):
         self.Id             =   int(pid)

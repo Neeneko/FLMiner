@@ -312,6 +312,8 @@ class FauxParser(object):
 
 class Progress(object):
 
+    SECTIONS    =   ["PendingProfiles","ErrorProfiles","MissingProfiles","CompletedProfiles","ActiveProfiles"]
+
     def __init__(self,rebuild=False,raw_data=None):
         self.__mutex        =   Lock()
         with self.__mutex:            

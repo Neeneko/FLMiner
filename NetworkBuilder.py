@@ -1,8 +1,8 @@
 import optparse
 import sys
 from Profile import Profile
-from Crawler import Progress,FauxParser
-from Blobber import LoadBlob,SaveBlob
+#from Crawler import Progress,FauxParser
+#from Blobber import LoadBlob,SaveBlob
 
 def clearNetwork(profiles):
     sys.stderr.write("Clearing Network\n")
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     if options.origin is None:
         parser.print_help()
         sys.exit()
-
+    """
     if options.blob:
         sys.stderr.write("Loading Blob\n")
         profileMap  =   GetBlob()
@@ -119,3 +119,4 @@ if __name__ == "__main__":
     buildNetwork(profileMap,options.origin)
     checkNetwork(profileMap)
     SaveBlob(profileMap)
+    """

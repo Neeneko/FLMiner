@@ -9,11 +9,13 @@ def log(message):
 
 class MultiGraph(object):
 
-    def __init__(self,title):
+    def __init__(self,title,rows=[],vertical=True):
         self.__title        =   title
         self.__data         =   {}
         self.__keys         =   set()
-        self.__vertical     =   True
+        self.__vertical     =   vertical
+        for row in rows:
+            self.incValue(row[0],row[1],1)
 
     def setVertical(self,vertical):
         self.__vertical     =   vertical
@@ -72,9 +74,15 @@ class PercentHeatMap(object):
 
 class SimpleGraph(object):
 
-    def __init__(self,title):
+    def __init__(self,title,preserve_order=False,rows=[]):
         self.__title            =   title
         self.__Data             =   {}
+        if preserve_order:
+            self.__order    =   []
+        else:
+            self.__order    =   None
+        for row in rows:
+            self.incValue(row[0],1)
 
     def getTitle(self):
         return self.__title
@@ -85,6 +93,8 @@ class SimpleGraph(object):
     def incValue(self,x,value):
         if x not in self.__Data:
             self.__Data[x]  =   0
+            if self.__order:
+                self.__order.append(x)
         self.__Data[x]      +=  value
 
     def getValue(self,x):
@@ -94,7 +104,10 @@ class SimpleGraph(object):
         return x in self.__Data.keys()
 
     def getKeys(self):
-        return self.__Data.keys()
+        if self.__order:
+            return self.__order
+        else:
+            return self.__Data.keys()
 
 class ReportData(object):
 
@@ -106,9 +119,9 @@ class ReportData(object):
 class ReportManager(object):
 
     COLOURS =   {
-                    "Male"      :   "Red",
-                    "Female"    :   "Blue",
-                    "Other"     :   "Green"
+                    Profile.GENDER_MALE_TITLE   :   "Red",
+                    Profile.GENDER_FEMALE_TITLE :   "Blue",
+                    Profile.GENDER_OTHER_TITLE  :   "Green"
                 }
 
     def __init__(self):
@@ -128,7 +141,7 @@ class ReportManager(object):
     def writeReport(self,data):
         log("Initing matplotlib")
         import numpy
-        from matplotlib import pyplot,colors
+        from matplotlib import pyplot,colors,ticker
         from matplotlib.backends.backend_pdf import PdfPages
         log("Done Init")
 
@@ -169,7 +182,7 @@ class ReportManager(object):
         pyplot.rc('ytick', labelsize=5)
         for graph in data.Graphs:
             if isinstance(graph,SimpleGraph):
-                keys    =   graph.getKeys()
+                keys    =   sorted(graph.getKeys())
                 y_pos = numpy.arange(len(keys))
                 values  =   [ graph.getValue(x) for x in keys ]
 
@@ -196,27 +209,19 @@ class ReportManager(object):
                         i   =   c-catRange[0]
                         j   =   k-keyRange[0]
                         data[i][j]  =   graph.getValue(c,k)
-                """
-                cdict = {'red':  (      (0.0,  1.0,  1.0),
-                                        (1.0,  0.9,  1.0) ),
-                        'green':(       (0.0,  1.0,  1.0),
-                                        (1.0,  0.03, 0.0) ),
-                        'blue': (       (0.0,  1.0,  1.0),
-                                        (1.0,  0.16, 0.0) ) }
-                """
-                cdict = {'red':  (      (0.0,   0.0,  1.0),
-                                        (0.0,  1.0,  0.0),
+                cdict = {
+                        'red':  (       (0.0,   0.0,  1.0),
+                                        (0.0,   1.0,  0.0),
                                         (0.5,   0.0,  0.0), 
-                                        (1.0,   1.0,  1.0) ),
+                                        (1.0,   1.0,  1.0)),
                         'green':(       (0.0,   0.0,  1.0),
-                                        (0.0,  1.0,  0.0),
-                                        (1.0,   0.0,  0.0) ),
+                                        (0.0,   1.0,  0.0),
+                                        (1.0,   0.0,  0.0)),
                         'blue': (       (0.0,   0.0,  1.0),
-                                        (0.0,  1.0,  1.0),
+                                        (0.0,   1.0,  1.0),
                                         (0.5,   0.0,  0.0), 
-                                        (1.0,   0.0,  0.0) ) }
-
-
+                                        (1.0,   0.0,  0.0))
+                        }
                 colorMap    =   colors.LinearSegmentedColormap("custom",cdict)
                 p = ax.pcolormesh(data,cmap=colorMap)
                 evenKeys    =   []
@@ -230,27 +235,31 @@ class ReportManager(object):
                 ax.set_yticks(numpy.arange(len(catRange)))
                 ax.set_yticklabels( catRange )
  
-
                 fig.colorbar(p)
                 pyplot.title(graph.getTitle())
             elif isinstance(graph,MultiGraph) and graph.getVertical():
-                keys    =   sorted(graph.getKeys())
-                cats    =   sorted(graph.getCats())
-                ind = numpy.arange(len(keys))*len(cats)
-                fig, ax = pyplot.subplots()
+                keys        =   sorted(graph.getKeys())
+                cats        =   sorted(graph.getCats())
+                ind         =   numpy.arange(len(keys))*len(cats)
+                fig, ax     =   pyplot.subplots()
                 for idx in range(len(graph.getCats())):
                     cat     =   cats[idx]
                     colour  =   self.__getColour(cat)
                     values  =   [ graph.getValue(cat,key) for key in keys ]
-                    rect    =   ax.bar(ind+idx, values, color=colour,edgecolor = "none")
+                    rect    =   ax.bar(ind+idx,values,color=colour,edgecolor = "none")
                 ax.set_title(graph.getTitle())
                 ax.set_xticks(ind)
                 ax.set_xticklabels( keys )
+                ax.set_xlim(0,len(keys)*len(cats))
+                ax.tick_params('both', length=0, width=0, which='minor')
+                ax.xaxis.set_major_formatter(ticker.NullFormatter())
+                ax.xaxis.set_minor_locator(ticker.FixedLocator(len(cats)/2.0 + ind))
+                ax.xaxis.set_minor_formatter(ticker.FixedFormatter(keys))
             elif isinstance(graph,MultiGraph) and not graph.getVertical():
-                keys    =   sorted(graph.getKeys())
-                cats    =   sorted(graph.getCats())
-                ind = numpy.arange(len(keys))*len(cats)
-                fig, ax = pyplot.subplots()
+                keys        =   sorted(graph.getKeys())
+                cats        =   sorted(graph.getCats())
+                ind         =   numpy.arange(len(keys))*(len(cats))
+                fig, ax     =   pyplot.subplots()
                 for idx in range(len(graph.getCats())):
                     cat     =   cats[idx]
                     colour  =   self.__getColour(cat)
@@ -259,7 +268,13 @@ class ReportManager(object):
                 ax.set_title(graph.getTitle())
                 ax.set_yticks(ind)
                 ax.set_yticklabels( keys )
-            pdf.savefig(fig)  # or you can pass a Figure object to pdf.savefig
+                ax.set_ylim(0,len(keys)*len(cats))
+                ax.tick_params('both', length=0, width=0, which='minor')
+                ax.yaxis.set_major_formatter(ticker.NullFormatter())
+                ax.yaxis.set_minor_locator(ticker.FixedLocator(len(cats)/2.0 + ind))
+                ax.yaxis.set_minor_formatter(ticker.FixedFormatter(keys))
+ 
+            pdf.savefig(fig)
             pyplot.close()
         pdf.close()
         

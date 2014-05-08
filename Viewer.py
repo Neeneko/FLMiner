@@ -10,7 +10,7 @@ from datetime import date,timedelta,datetime
 #from Crawler import Crawler,Session
 from Crawler import Progress,FauxParser
 from Profile import Profile
-from Blobber import LoadBlob,DataBlob
+from Blobber import CreateMemoryOnlyBlob,LoadSavedBlob
 from Report import ReportManager,ReportData,MultiGraph,SimpleGraph,PercentHeatMap
 from NetworkBuilder import clearNetwork,buildNetwork
 
@@ -23,12 +23,11 @@ if __name__ == "__main__":
 
     if options.blob:
         sys.stderr.write("Loading Blob [%s]\n" % options.blob)
-        dataBlob    =   LoadBlob(options.blob)
-        profileMap  =   dataBlob.getProfiles()
-        progress    =   dataBlob.getProgress()
-        sys.stderr.write("Loaded [%d] Profiles\n" % len(profileMap))
+        profileDb   =   LoadSavedBlob(options.blob)
     else:
         sys.stderr.write("Loading Profiles\n")
+        profileDb   =   CreateMemoryOnlyBlob()
+        """
         maxProfile  =   sys.maxint
         progress    =   Progress()
         uids        =   set(progress.getIds("CompletedProfiles"))
@@ -45,8 +44,9 @@ if __name__ == "__main__":
             if count == maxProfile:
                 break
         sys.stderr.write("Loaded [%d] Profiles\n" % len(profileMap))
-
-    sys.stderr.write("Filling Profile Lists\n")
+        """
+    sys.stderr.write("Completed [%d] Profiles\n" % len(profileDb.GetSection("CompletedProfiles")))
+    sys.stderr.write("Missing   [%d] Profiles\n" % len(profileDb.GetSection("MissingProfiles")))
     """
     reportData                      =   {}
     reportData["AllProfiles"]       =   []
@@ -165,6 +165,7 @@ if __name__ == "__main__":
     """
 
     reportData      =   ReportData()
+    """
     for profile in profileMap.itervalues():
         reportData.AllProfiles.append(profile)
         crawl   =   profile.getCrawlDate()
@@ -172,12 +173,15 @@ if __name__ == "__main__":
         delta   =   crawl-last
         if delta.days < 30:
             reportData.ActiveProfiles.append(profile)
-
-    reportData.Graphs.append(SimpleGraph("Profiles"))
-    reportData.Graphs[-1].setValue("All",len(reportData.AllProfiles))
-    reportData.Graphs[-1].setValue("Active",len(reportData.ActiveProfiles))
-    reportData.Graphs[-1].setValue("Missing",len(progress.getIds("MissingProfiles")))
-
+    """
+    reportData.Graphs.append(SimpleGraph("Profiles",preserve_order=True))
+    reportData.Graphs[-1].setValue("Missing",len(profileDb.GetSection("MissingProfiles")))
+    reportData.Graphs[-1].setValue("Active in  30 days",len(profileDb.GetProfilesActiveInDays(30)))
+    reportData.Graphs[-1].setValue("Active in  60 days",len(profileDb.GetProfilesActiveInDays(60)))
+    reportData.Graphs[-1].setValue("Active in  90 days",len(profileDb.GetProfilesActiveInDays(90)))
+    reportData.Graphs[-1].setValue("Active in 180 days",len(profileDb.GetProfilesActiveInDays(180)))
+    reportData.Graphs[-1].setValue("All",len(profileDb.GetAllProfileIds()))
+    """
     multiChartNames                             =   [
                                                         #"Type",
                                                         "Age",
@@ -190,10 +194,17 @@ if __name__ == "__main__":
                                                         "Active"
                                                     ]
  
-
-    genderGraph             =   SimpleGraph("Gender")
+    """
+    genderGraph             =   SimpleGraph("Gender",rows=profileDb.GetProfiles("Gender"))
     genderGraphs            =   {}
-    genderGraphs["Age"]     =   MultiGraph("Age By Gender")  
+    genderGraphs["Age"]     =   MultiGraph("Age By Gender",rows=profileDb.GetProfiles("GenderGroup","Age"))
+    genderGraphs["Ori"]     =   MultiGraph("Orientation By Gender",vertical=False,rows=profileDb.GetProfiles("GenderGroup","Orientation"))
+    genderGraphs["Ident"]   =   MultiGraph("Identity By Gender",vertical=False,rows=profileDb.GetProfiles("GenderGroup","Type"))
+    #genderGraphs["Look"]    =   MultiGraph("Looking For By Gender",vertical=False,rows=profileDb.GetProfiles("GenderGroup","LookingFor"))
+    genderGraphs["Active"]  =   MultiGraph("Actvity Type By Gender",vertical=False,rows=profileDb.GetProfiles("GenderGroup","Active"))  
+    genderGraphs["RType"]   =   MultiGraph("Relationship Type By Gender",vertical=False,rows=profileDb.GetProfiles("GenderGroup","Relationships.Enum"))  
+    genderGraphs["Look"]    =   MultiGraph("Looking For By Gender",vertical=False,rows=profileDb.GetProfiles("GenderGroup","LookingFor.Enum"))  
+    """
     genderGraphs["Ori"]     =   MultiGraph("Orientation By Gender")  
     genderGraphs["Ori"].setVertical(False)
     genderGraphs["Ident"]   =   MultiGraph("Identity By Gender")  
@@ -205,9 +216,6 @@ if __name__ == "__main__":
     genderGraphs["Active"].setVertical(False)
     genderGraphs["RType"]  =   MultiGraph("Relationship Type By Gender")  
     genderGraphs["RType"].setVertical(False)
-
-
-
 
     for profile in reportData.ActiveProfiles:
         genderGraph.incValue(profile.Gender,1)
@@ -245,11 +253,13 @@ if __name__ == "__main__":
             womenHeat.incValue(profile.Degree,profile.Age,1)
 
     sys.stderr.write("Done Heatmaps\n")
-
+    """
     reportData.Graphs.append(genderGraph)
     for v in genderGraphs.values():
         reportData.Graphs.append(v)
+    """
     reportData.Graphs.append(womenHeat)
+    """
     reportManager   =   ReportManager()
     reportManager.writeReport(reportData)
     reportManager.displayReport()
