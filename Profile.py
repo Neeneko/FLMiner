@@ -18,9 +18,10 @@ class Profile(object):
     GENDER_FEMALE_TITLE     =   "Female"
     GENDER_OTHER_TITLE      =   "Other"
 
-    INT_FIELDS              =   ["Id","Age","Degree"]
+    INT_FIELDS              =   ["Id","Age"]
     TEXT_FIELDS             =   ["Name","Gender","Type","Orientation","Active"]
     DATE_FIELDS             =   ["LastActivity","CrawlDate"]
+    LIST_ID_FIELDS          =   ["Friends"]
     LIST_FIELDS             =   ["Location","LookingFor"]
     FETISH_FIELDS           =   ["Into","Curious"]
     LIST_TUPLE_FIELDS       =   ["Relationships"]

@@ -37,11 +37,15 @@ class ProfileDb(object):
         cursor.execute(createString)
 
         cursor.execute("DROP TABLE IF EXISTS Enums")
-        cursor.execute("CREATE TABLE Enums (Enum INT, Value TEXT, Origin TEXT)")
+        cursor.execute("CREATE TABLE Enums (Enum INT, Value TEXT, SrcTable TEXT)")
 
         for field in Profile.LIST_FIELDS:
             cursor.execute("DROP TABLE IF EXISTS %s" % field)
             cursor.execute("CREATE TABLE %s(Id INT, Enum INT)" % (field))
+
+        for field in Profile.LIST_ID_FIELDS:
+            cursor.execute("DROP TABLE IF EXISTS %s" % field)
+            cursor.execute("CREATE TABLE %s(Id INT, DstId INT)" % (field))
 
         for field in Profile.LIST_TUPLE_FIELDS:
             cursor.execute("DROP TABLE IF EXISTS %s" % field)
@@ -50,6 +54,9 @@ class ProfileDb(object):
         for field in Profile.FETISH_FIELDS:
             cursor.execute("DROP TABLE IF EXISTS Fetish%s" % field)
             cursor.execute("CREATE TABLE Fetish%s(Id INT, Fetish INT, Enum INT)" % (field))
+
+        cursor.execute("DROP TABLE IF EXISTS Degrees")
+        cursor.execute("CREATE TABLE Degrees (Id INT, DstId INT, Degree INT)")
 
         self.__db.commit()
 
@@ -71,42 +78,68 @@ class ProfileDb(object):
     def GetAllProfileIds(self):
         cursor = self.__db.cursor()
         cursor.execute("SELECT Id FROM Profiles")
-        return cursor.fetchall()
+        return [x[0] for x in cursor.fetchall()]
 
     def GetSection(self,section):
         cursor = self.__db.cursor()
         cursor.execute("SELECT Id FROM %s" % section)
         return cursor.fetchall()
 
+    def RunRawQuery(self,query,*args):
+        cursor = self.__db.cursor()
+        cursor.execute(query,args)
+        return cursor.fetchall()
+
+    def Commit(self):
+        self.__db.commit()
+
+    def GetProfileName(self,profile_id):
+        cursor = self.__db.cursor()
+        cursor.execute("SELECT Name FROM Profiles WHERE Id=?",[profile_id])
+        rows = cursor.fetchall()
+        if len(rows) == 0:
+            return None
+        assert len(rows) == 1
+        return rows[0][0]
+ 
     def GetProfiles(self,*args,**kwargs):
-        sString =   "Profiles"
-        cString =   ""
-        filters =   []
+        cursor      =   self.__db.cursor()
+        sString     =   "Profiles"
+        cString     =   ""
+        filters     =   []
+        cursor.execute("SELECT DISTINCT SrcTable FROM Enums")
+        eNumTables  =   [x[0] for x in cursor.fetchall()]
         for idx in range(len(args)):
             if idx != 0:
                 cString += ","
             if '.' in args[idx]:
 
-                if "Enums" not in sString:
-                    sString += ",Enums"
-
                 splitList = re.split("\.",args[idx])
                 table = splitList[0]
+                if table in eNumTables and "Enums" not in sString:
+                    sString += ",Enums"
+
                 if table not in sString:
                     sString += ",%s" % table
                     filters.append("Profiles.Id = %s.Id" % table)
-                    filters.append("Enums.Enum = %s" % args[idx])
+                    if table in eNumTables:
+                        filters.append("Enums.Enum = %s" % args[idx])
 
-                cString += "Enums.Value"
+                if table in eNumTables:
+                    cString += "Enums.Value"
+                else:
+                    cString += args[idx]
             else:
                 cString += args[idx]
                 
         if "activeInDays" in kwargs:
             filters.append("CrawlDate-LastActivity < %d" % kwargs["activeInDays"])
 
-        if "filterByField" in kwargs:
-            splitList = re.split(',',kwargs["filterByField"])
-            filters.append("WHERE %s=%s" % (splitList[0],splitList[1]))
+        if "filterEqField" in kwargs:
+            filters.append("%s=\"%s\"" % kwargs["filterEqField"])
+
+        if "filterGtField" in kwargs:
+            filters.append("%s>\"%s\"" % kwargs["filterGtField"])
 
         if len(filters) != 0:
             fString =   "WHERE "
@@ -120,9 +153,13 @@ class ProfileDb(object):
 
         eString     =   "SELECT %s FROM %s %s" % (cString,sString,fString)
         sys.stderr.write("[%s]\n" % eString)
-        cursor      =   self.__db.cursor()
         cursor.execute(eString)
         return cursor.fetchall()
+
+    def GetDegreeOrigins(self):
+        cursor      =   self.__db.cursor()
+        cursor.execute("SELECT DISTINCT DstId from Degrees")
+        return [x[0] for x in cursor.fetchall()]
 
     def AddProfile(self,profile):
         cursor = self.__db.cursor()
@@ -162,7 +199,7 @@ class ProfileDb(object):
 
         cursor.execute(insertString,tuple(args))
 
-        for field in Profile.LIST_FIELDS:
+        for field in Profile.LIST_ID_FIELDS:
             for value in getattr(profile,field):
                 cursor.execute("INSERT INTO %s VALUES(?,?)" % field,(profile.Id,value))
 
@@ -172,7 +209,7 @@ class ProfileDb(object):
         for field in Profile.LIST_TUPLE_FIELDS:
             for (dst,text) in getattr(profile,field):
                 if text not in [ x[1] for x in enumRows]:
-                    sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
+                    #sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
                     if len(enumRows) == 0:
                         nextId  =   0   
                     else:
@@ -190,7 +227,7 @@ class ProfileDb(object):
         for field in Profile.LIST_FIELDS:
             for text in getattr(profile,field):
                 if text not in [ x[1] for x in enumRows]:
-                    sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
+                    #sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
                     if len(enumRows) == 0:
                         nextId  =   0   
                     else:
@@ -208,7 +245,7 @@ class ProfileDb(object):
         for field in Profile.FETISH_FIELDS:
             for (text,values) in getattr(profile,field).iteritems():
                 if text not in [ x[1] for x in enumRows]:
-                    sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
+                    #sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
                     if len(enumRows) == 0:
                         nextId  =   0   
                     else:
@@ -279,34 +316,3 @@ if __name__ == "__main__":
         raise NotImplementedError
     else:
         raise RuntimeError
-    """
-    if options.create:
-
-        progress    =   Progress()
-        uids        =   set(progress.getIds("CompletedProfiles"))
-        profileMap  =   {}
-        sys.stderr.write("Profiles to load: [%s]\n" % len(uids))
-        count = 0
-        for uid in uids:
-            if count%1024 == 0:
-                sys.stderr.write("Progress - Loaded [%s]\n" % count)
-            profile =   Profile(uid)
-            if(profile.load()):
-                profileMap[uid] =   profile
-            else:
-                progress.errorProfile(uid)
-            count += 1
-        sys.stderr.write("Loaded [%d] Profiles\n" % len(profileMap))
-    
-        sys.stderr.write("Writing Blob [%s]\n" % fileName)
-        SaveBlob(DataBlob(profileMap,progress),fileName)
-        sys.stderr.write("Done Writing Blob\n")
-    elif options.validate:
-        dataBlob    =   LoadBlob(fileName)
-        progress    =   dataBlob.getProgress()
-        progress.printProgress()
-        profiles    =   dataBlob.getProfiles()
-        sys.stderr.write("[%d] Profiles\n" % len(profiles))
-    else:
-        raise RuntimeError
-    """

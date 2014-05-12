@@ -46,10 +46,10 @@ class MultiGraph(object):
 
 class PercentHeatMap(object):
 
-    def __init__(self,title):
+    def __init__(self,title,values_rows=None,totals_rows=None):
         self.__title = title
-        self.__values   =   MultiGraph("Values")
-        self.__totals   =   MultiGraph("Totals")
+        self.__values   =   MultiGraph("Values",rows=values_rows)
+        self.__totals   =   MultiGraph("Totals",rows=totals_rows)
         
     def getTitle(self):
         return self.__title
