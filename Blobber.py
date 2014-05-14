@@ -6,7 +6,11 @@ import cPickle as Pickle
 import sqlite3
 from datetime import date,datetime
 from Profile import Profile
-from Crawler import Progress,FauxParser
+from Crawler import Progress,FauxParser,StringMap
+
+def debug(mesg):
+    sys.stderr.write("%s\n" % mesg.encode("utf-8"))
+    sys.stderr.flush()
 
 class ProfileDb(object):
 
@@ -51,9 +55,11 @@ class ProfileDb(object):
             cursor.execute("DROP TABLE IF EXISTS %s" % field)
             cursor.execute("CREATE TABLE %s(Id INT, DstId INT, Enum INT)" % (field))
 
-        for field in Profile.FETISH_FIELDS:
-            cursor.execute("DROP TABLE IF EXISTS Fetish%s" % field)
-            cursor.execute("CREATE TABLE Fetish%s(Id INT, Fetish INT, Enum INT)" % (field))
+        cursor.execute("DROP TABLE IF EXISTS Fetishes")
+        cursor.execute("CREATE TABLE Fetishes (Id INTEGER PRIMARY KEY, Name TEXT)")
+        cursor.execute("DROP TABLE IF EXISTS ProfileToFetish")
+        cursor.execute("CREATE TABLE ProfileToFetish(ProfileId INT, FetishId INT, Relation TEXT)")
+
 
         cursor.execute("DROP TABLE IF EXISTS Degrees")
         cursor.execute("CREATE TABLE Degrees (Id INT, DstId INT, Degree INT)")
@@ -162,6 +168,7 @@ class ProfileDb(object):
         return [x[0] for x in cursor.fetchall()]
 
     def AddProfile(self,profile):
+        debug("Adding Profile [%s]" % profile.Id) 
         cursor = self.__db.cursor()
 
         insertString    =   "INSERT INTO Profiles VALUES("
@@ -242,7 +249,11 @@ class ProfileDb(object):
                         break
                 cursor.execute("INSERT INTO %s VALUES(?,?)" % field,(profile.Id,thisId))
 
+        stringMap   =   StringMap()
+        #cursor.execute("CREATE TABLE Fetishes (Id INTEGER PRIMARY KEY, Name TEXT)")
+        #cursor.execute("CREATE TABLE ProfileToFetish(ProfileId INT, FetishId INT, Relation TEXT)")
         for field in Profile.FETISH_FIELDS:
+            debug("\t[%s] - [%s]" % (field,len(getattr(profile,field))))
             for (text,values) in getattr(profile,field).iteritems():
                 if text not in [ x[1] for x in enumRows]:
                     #sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
@@ -250,7 +261,7 @@ class ProfileDb(object):
                         nextId  =   0   
                     else:
                         nextId      =   max([x[0] for x in enumRows])+1
-                    cursor.execute("INSERT INTO Enums VALUES(?,?,?)", (nextId,text,field))
+                    cursor.execute("INSERT INTO Enums VALUES(?,?,?)",(nextId,text,field))
                     cursor.execute("SELECT * FROM Enums")
                     enumRows    =   cursor.fetchall()
                 thisId  =   None
@@ -258,9 +269,15 @@ class ProfileDb(object):
                     if enumText == text:
                         thisId = enumId
                         break
+ 
+                debug("\t\t[%s][%s] - [%s]" % (text,thisId,len(values)))
                 for value in values:
-                    cursor.execute("INSERT INTO Fetish%s VALUES(?,?,?)" % field,(profile.Id,value,thisId))
-
+                    fetish    =   stringMap.getString("Fetish",value)
+                    debug("\t\t\t[%s] - [%s]" % (value,fetish))
+                    cursor.execute("SELECT COUNT(*) FROM Fetishes WHERE Name=?",[fetish])
+                    if cursor.fetchall()[0][0] == 0:
+                        cursor.execute("INSERT INTO Fetishes VALUES(?,?)", (value,fetish))
+                    cursor.execute("INSERT INTO ProfileToFetish VALUES(?,?,?)" ,(profile.Id,value,thisId))
         self.__db.commit()
 
 def LoadSavedBlob(file_name):

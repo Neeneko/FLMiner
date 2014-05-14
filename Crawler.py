@@ -51,11 +51,17 @@ class StringMap(object):
 
         def hasString(self,section,key):
             with self.__mutex:
-                if section in self.__sections and key in self.__sections[section]:
+                if section in self.__sections and int(key) in self.__sections[section]:
                     return True
                 else:
                     return False
 
+        def getString(self,section,key):
+            with self.__mutex:
+                if section in self.__sections and int(key) in self.__sections[section]:
+                    return self.__sections[section][int(key)]
+                else:
+                    return None
 
     def __init__(self):
            if StringMap.__instance is None:

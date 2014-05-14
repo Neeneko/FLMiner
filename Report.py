@@ -141,6 +141,7 @@ class ReportManager(object):
     def writeReport(self,data):
         log("Initing matplotlib")
         import numpy
+        import pylab
         from matplotlib import pyplot,colors,ticker
         from matplotlib.backends.backend_pdf import PdfPages
         log("Done Init")
@@ -187,7 +188,6 @@ class ReportManager(object):
                 values  =   [ graph.getValue(x) for x in keys ]
 
                 pyplot.rc('text', usetex=False)
-                #fig = pyplot.figure(figsize=(4, 5))
                 fig = pyplot.figure()
                 colours =   [ self.__getColour(x) for x in keys ]
 
@@ -209,6 +209,9 @@ class ReportManager(object):
                         i   =   c-catRange[0]
                         j   =   k-keyRange[0]
                         data[i][j]  =   graph.getValue(c,k)
+                        if data[i][j] == 0:
+                            data[i][j] = -1
+                c   =   pylab.ma.masked_where(c<0,c)
                 cdict = {
                         'red':  (       (0.0,   0.0,  1.0),
                                         (0.0,   1.0,  0.0),
@@ -222,6 +225,22 @@ class ReportManager(object):
                                         (0.5,   0.0,  0.0), 
                                         (1.0,   0.0,  0.0))
                         }
+                """
+                cdict = {
+                        'red':  (       (0.0,   0.0,  0.0),
+                                        (0.5,   0.0,  0.0), 
+                                        (1.0,   1.0,  1.0)),
+                        'green':(       
+                                        (0.0,   0.0,  0.0),
+                                        (1.0,   0.0,  0.0)),
+                        'blue': (       
+                                        (0.0,   1.0,  0.0),
+                                        (0.5,   0.0,  0.0), 
+                                        (1.0,   0.0,  0.0))
+                        }
+                """
+ 
+
                 colorMap    =   colors.LinearSegmentedColormap("custom",cdict)
                 p = ax.pcolormesh(data,cmap=colorMap)
                 evenKeys    =   []
@@ -233,9 +252,16 @@ class ReportManager(object):
                 ax.set_xticks(numpy.arange(len(evenKeys)))
                 ax.set_xticklabels( evenKeys )
                 ax.set_yticks(numpy.arange(len(catRange)))
-                ax.set_yticklabels( catRange )
+                ind         =   numpy.arange(len(catRange))
+                ax.tick_params('both', length=0, width=0, which='minor')
+                ax.yaxis.set_major_formatter(ticker.NullFormatter())
+                ax.yaxis.set_minor_locator(ticker.FixedLocator(0.5+ind))
+                ax.yaxis.set_minor_formatter(ticker.FixedFormatter(catRange))
  
-                fig.colorbar(p)
+                ax.set_xlim(0,len(keyRange))
+                colorBar    =   fig.colorbar(p,values=numpy.arange(101),boundaries=numpy.arange(101),ticks=[0,25,50,75,100],orientation='horizontal')
+                colorBar.ax.set_xticklabels(['0%','25%' ,'50%','75%' ,'100%'])
+                sys.stderr.write("boundries - %s\n" % str(colorBar._boundaries))
                 pyplot.title(graph.getTitle())
             elif isinstance(graph,MultiGraph) and graph.getVertical():
                 keys        =   sorted(graph.getKeys())
