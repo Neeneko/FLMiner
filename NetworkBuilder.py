@@ -98,13 +98,21 @@ class NetworkBuilder(object):
     def __init__(self,db):
         self.__db   =   db
         sys.stderr.write("Init Network Builder\n")
+        maxId           =   self.__db.RunRawQuery("SELECT MAX(Id) from Profiles")[0][0]
+        sys.stderr.write("Max Id [%s]\n" % maxId)
         self.__allIds   =   self.__db.GetAllProfileIds()
         self.__degrees  =   dict.fromkeys(self.__allIds,-1)
-        self.__otherIds =   {key: set() for key in self.__allIds}
+        self.__otherIds =   [None] * (maxId+1)
         for row in self.__db.RunRawQuery("SELECT DISTINCT Id,DstId from Relationships"):
+            if self.__otherIds[row[0]] is None:
+                self.__otherIds[row[0]] = set()
             self.__otherIds[row[0]].add(row[1])
+            del row
         for row in self.__db.RunRawQuery("SELECT Id,DstId from Friends"):
+            if self.__otherIds[row[0]] is None:
+                self.__otherIds[row[0]] = set()
             self.__otherIds[row[0]].add(row[1])
+            del row
         sys.stderr.write("Fini Network Builder\n")
 
     def clearNetwork(self,profile_id=None):
