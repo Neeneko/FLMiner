@@ -97,18 +97,39 @@ class NetworkBuilder(object):
 
     def __init__(self,db):
         self.__db   =   db
+        cursor      =   db.GetCursor()
         sys.stderr.write("Init Network Builder\n")
         maxId           =   self.__db.RunRawQuery("SELECT MAX(Id) from Profiles")[0][0]
         sys.stderr.write("Max Id [%s]\n" % maxId)
         self.__allIds   =   self.__db.GetAllProfileIds()
         self.__degrees  =   dict.fromkeys(self.__allIds,-1)
         self.__otherIds =   [None] * (maxId+1)
-        for row in self.__db.RunRawQuery("SELECT DISTINCT Id,DstId from Relationships"):
+        sys.stderr.write("Relationships\n")
+        cursor.execute("SELECT DISTINCT Id,DstId from Relationships")
+        count   =   0
+        while True:
+            row = cursor.fetchone()
+            if row is None:
+                sys.stderr.write("\t[%s] Total\n" % count)
+                break
+            count   +=  1
+            if count%(1024*1024) == 0:
+                sys.stderr.write("\t[%s]\n" % count)
             if self.__otherIds[row[0]] is None:
                 self.__otherIds[row[0]] = set()
             self.__otherIds[row[0]].add(row[1])
             del row
-        for row in self.__db.RunRawQuery("SELECT Id,DstId from Friends"):
+        sys.stderr.write("Friends\n")
+        cursor.execute("SELECT Id,DstId from Friends")
+        count   =   0
+        while True:
+            row = cursor.fetchone()
+            if row is None:
+                sys.stderr.write("\t[%s] Total\n" % count)
+                break
+            count += 1
+            if count%(1024*1024) == 0:
+                sys.stderr.write("\t[%s]\n" % count)
             if self.__otherIds[row[0]] is None:
                 self.__otherIds[row[0]] = set()
             self.__otherIds[row[0]].add(row[1])
@@ -155,7 +176,11 @@ class NetworkBuilder(object):
             nextDegree  =   self.__degrees[profileId]+1
             maxDegree   =   max(nextDegree,maxDegree)
             sys.stderr.write("\tProfileId [%s] NextDegree [%s] OtherIds [%s]\n" % (profileId,nextDegree,len(self.__otherIds[profileId])))
+            otherCount  =   0
             for otherId in self.__otherIds[profileId]:
+                otherCount += 1
+                if otherCount%1024==0:
+                    sys.stderr.write("\t\tOtherIds [%s]\n" % otherCount)
                 if otherId not in self.__allIds:
                     bad += 1
                 elif self.__degrees[otherId] == -1:

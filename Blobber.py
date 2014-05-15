@@ -66,6 +66,9 @@ class ProfileDb(object):
 
         self.__db.commit()
 
+    def GetCursor(self):
+        return self.__db.cursor()
+
     def Close(self):
         self.__db.close()
         self.__db   =   None
