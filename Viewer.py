@@ -62,14 +62,40 @@ if __name__ == "__main__":
  
     sys.stderr.write("Done Heatmaps\n")
 
-    """
-    networkBuilder  =   NetworkBuilder(profileDb)
-    networkBuilder.buildNetwork(1)
-    womenValues =   profileDb.GetProfiles("Degree","Age",filterEqField=("GenderGroup","Female"),filterGtField=("Degree",0))
-    womenTotals =   profileDb.GetProfiles("Degree","Age",filterGtField=("Degree",0))
-    womenHeat   =   PercentHeatMap("Percent Women from %s" % profileDb.GetProfileName(1),values_rows=womenValues,totals_rows=womenTotals)
-    reportData.Graphs.append(womenHeat)
-    """
+
+    sys.stderr.write("Examining Fetishes\n")
+    #TODO - we might hit the megadict problem here.
+    fetishes    =   {}
+    fetishes["Totals"]  =   {}
+    cursor      =   profileDb.GetCursor()
+    count       =   0
+    cursor.execute("SELECT * FROM ProfileToFetish")
+    while True:
+        row = cursor.fetchone()
+        if row is None:
+            sys.stderr.write("\t[%s] Total\n" % count)
+            break
+        count += 1
+        profileId   =   row[0]
+        fetishId    =   row[1]
+        relationId  =   row[2]
+        if fetishId not in fetishes["Totals"]:
+            fetishes["Totals"][fetishId]    =   0
+        fetishes["Totals"][fetishId]        +=  1
+    #for fetishId,fetishCount in fetishes["Totals"].iteritems():
+    #    sys.stderr.write("[%s] => [%s]\n" % (fetishId,fetishCount))
+
+    sortedTotals = sorted(fetishes["Totals"],key=fetishes["Totals"].get,reverse=True)[:32]
+
+    fetishGraph =   SimpleGraph("Top Fetishes",preserve_order=True)
+    for fetishId in sortedTotals:
+        cursor.execute("SELECT * FROM Fetishes WHERE Id=?",[fetishId])
+        row = cursor.fetchone()
+        fetishGraph.setValue(row[1],fetishes["Totals"][row[0]])
+        sys.stderr.write("[%s] => [%s]\n" % (row[1],fetishes["Totals"][fetishId]))
+    reportData.Graphs.append(fetishGraph)
+    sys.stderr.write("Done Fetishes\n")
+
     reportManager   =   ReportManager()
     reportManager.writeReport(reportData)
     reportManager.displayReport()

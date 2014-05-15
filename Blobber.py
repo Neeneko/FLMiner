@@ -58,7 +58,7 @@ class ProfileDb(object):
         cursor.execute("DROP TABLE IF EXISTS Fetishes")
         cursor.execute("CREATE TABLE Fetishes (Id INTEGER PRIMARY KEY, Name TEXT)")
         cursor.execute("DROP TABLE IF EXISTS ProfileToFetish")
-        cursor.execute("CREATE TABLE ProfileToFetish(ProfileId INT, FetishId INT, Relation TEXT)")
+        cursor.execute("CREATE TABLE ProfileToFetish(ProfileId INT, FetishId INT, Enum INT)")
 
 
         cursor.execute("DROP TABLE IF EXISTS Degrees")

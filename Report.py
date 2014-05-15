@@ -88,13 +88,16 @@ class SimpleGraph(object):
         return self.__title
 
     def setValue(self,x,value):
+        sys.stderr.write("setValue(%s,%s) Order [%s]\n" % (x,value,self.__order))
+        if x not in self.__Data and self.__order is not None:
+            self.__order = [x] + self.__order
         self.__Data[x]      =   value
 
     def incValue(self,x,value):
         if x not in self.__Data:
             self.__Data[x]  =   0
-            if self.__order:
-                self.__order.append(x)
+            if self.__order is not None:
+                self.__order = [x] + self.__order
         self.__Data[x]      +=  value
 
     def getValue(self,x):
@@ -107,7 +110,7 @@ class SimpleGraph(object):
         if self.__order:
             return self.__order
         else:
-            return self.__Data.keys()
+            return sorted(self.__Data.keys())
 
 class ReportData(object):
 
@@ -183,7 +186,8 @@ class ReportManager(object):
         pyplot.rc('ytick', labelsize=5)
         for graph in data.Graphs:
             if isinstance(graph,SimpleGraph):
-                keys    =   sorted(graph.getKeys())
+                keys    =   graph.getKeys()
+                sys.stderr.write("SimpleGraph Keys [%s]\n" % str(keys))
                 y_pos = numpy.arange(len(keys))
                 values  =   [ graph.getValue(x) for x in keys ]
 
@@ -194,6 +198,13 @@ class ReportManager(object):
                 pyplot.barh(y_pos, values, align='center', alpha=0.4, color=colours)
                 pyplot.yticks(y_pos, keys)
                 pyplot.title(graph.getTitle())
+                """
+                ax.set_ylim(0,len(keys))
+                ax.tick_params('both', length=0, width=0, which='minor')
+                ax.yaxis.set_major_formatter(ticker.NullFormatter())
+                ax.yaxis.set_minor_locator(ticker.FixedLocator(len(keys)/2.0 + y_pos))
+                ax.yaxis.set_minor_formatter(ticker.FixedFormatter(keys))
+                """
             elif isinstance(graph,PercentHeatMap):
                 pyplot.rc('xtick', labelsize=6) 
                 pyplot.rc('xtick', labelsize=6) 

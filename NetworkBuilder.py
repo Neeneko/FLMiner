@@ -102,7 +102,8 @@ class NetworkBuilder(object):
         maxId           =   self.__db.RunRawQuery("SELECT MAX(Id) from Profiles")[0][0]
         sys.stderr.write("Max Id [%s]\n" % maxId)
         self.__allIds   =   self.__db.GetAllProfileIds()
-        self.__degrees  =   dict.fromkeys(self.__allIds,-1)
+        #self.__degrees  =   dict.fromkeys(self.__allIds,-1)
+        self.__degrees  =   [-1] * (maxId+1)
         self.__otherIds =   [None] * (maxId+1)
         sys.stderr.write("Relationships\n")
         cursor.execute("SELECT DISTINCT Id,DstId from Relationships")
@@ -143,7 +144,9 @@ class NetworkBuilder(object):
         else:
             self.__db.RunRawQuery("DELETE FROM Degrees WHERE DstId=?", profile_id)
 
-        self.__degrees  =   dict.fromkeys(self.__allIds,-1)
+        maxId           =   self.__db.RunRawQuery("SELECT MAX(Id) from Profiles")[0][0]
+        self.__degrees  =   [-1] * (maxId+1)
+        #self.__degrees  =   dict.fromkeys(self.__allIds,-1)
         sys.stderr.write("Cleared Network\n")
 
     def spiderFix(self,profile_id):
