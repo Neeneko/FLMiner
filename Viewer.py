@@ -38,7 +38,7 @@ if __name__ == "__main__":
     reportData.Graphs[-1].setValue("Active in  90 days",len(profileDb.GetProfilesActiveInDays(90)))
     reportData.Graphs[-1].setValue("Active in 180 days",len(profileDb.GetProfilesActiveInDays(180)))
     reportData.Graphs[-1].setValue("All",len(profileDb.GetAllProfileIds()))
-    genderGraph             =   SimpleGraph("Gender",rows=profileDb.GetProfiles("Gender"))
+    genderGraph             =   SimpleGraph("Gender",rows=profileDb.GetProfiles("Gender"),default_colour="Green")
     genderGraphs            =   {}
     genderGraphs["Age"]     =   MultiGraph("Age By Gender",rows=profileDb.GetProfiles("GenderGroup","Age"))
     genderGraphs["Ori"]     =   MultiGraph("Orientation By Gender",vertical=False,rows=profileDb.GetProfiles("GenderGroup","Orientation"))
@@ -82,8 +82,6 @@ if __name__ == "__main__":
         if fetishId not in fetishes["Totals"]:
             fetishes["Totals"][fetishId]    =   0
         fetishes["Totals"][fetishId]        +=  1
-    #for fetishId,fetishCount in fetishes["Totals"].iteritems():
-    #    sys.stderr.write("[%s] => [%s]\n" % (fetishId,fetishCount))
 
     sortedTotals = sorted(fetishes["Totals"],key=fetishes["Totals"].get,reverse=True)[:32]
 
@@ -92,7 +90,6 @@ if __name__ == "__main__":
         cursor.execute("SELECT * FROM Fetishes WHERE Id=?",[fetishId])
         row = cursor.fetchone()
         fetishGraph.setValue(row[1],fetishes["Totals"][row[0]])
-        sys.stderr.write("[%s] => [%s]\n" % (row[1],fetishes["Totals"][fetishId]))
     reportData.Graphs.append(fetishGraph)
     sys.stderr.write("Done Fetishes\n")
 

@@ -74,21 +74,24 @@ class PercentHeatMap(object):
 
 class SimpleGraph(object):
 
-    def __init__(self,title,preserve_order=False,rows=[]):
+    def __init__(self,title,preserve_order=False,rows=[],default_colour=None):
         self.__title            =   title
         self.__Data             =   {}
         if preserve_order:
-            self.__order    =   []
+            self.__order        =   []
         else:
-            self.__order    =   None
+            self.__order        =   None
+        self.__defaultColour    =   default_colour
         for row in rows:
             self.incValue(row[0],1)
 
     def getTitle(self):
         return self.__title
 
+    def getDefaultColour(self):
+        return self.__defaultColour
+
     def setValue(self,x,value):
-        sys.stderr.write("setValue(%s,%s) Order [%s]\n" % (x,value,self.__order))
         if x not in self.__Data and self.__order is not None:
             self.__order = [x] + self.__order
         self.__Data[x]      =   value
@@ -130,13 +133,15 @@ class ReportManager(object):
     def __init__(self):
         self.__reportPath      =    os.path.join(os.path.dirname(sys.modules[__name__].__file__), "Report")
 
-    def __getColour(self,label):
+    def __getColour(self,label,default=None):
         if label in ReportManager.COLOURS:
             return ReportManager.COLOURS[label]
         elif label in Profile.GENDER_GROUP_MALE:
             return ReportManager.COLOURS["Male"]
         elif label in Profile.GENDER_GROUP_FEMALE:
             return ReportManager.COLOURS["Female"]
+        elif default is not None:
+            return default
         else:
             return "Black"
 
@@ -186,25 +191,20 @@ class ReportManager(object):
         pyplot.rc('ytick', labelsize=5)
         for graph in data.Graphs:
             if isinstance(graph,SimpleGraph):
-                keys    =   graph.getKeys()
-                sys.stderr.write("SimpleGraph Keys [%s]\n" % str(keys))
-                y_pos = numpy.arange(len(keys))
-                values  =   [ graph.getValue(x) for x in keys ]
-
-                pyplot.rc('text', usetex=False)
-                fig = pyplot.figure()
-                colours =   [ self.__getColour(x) for x in keys ]
-
-                pyplot.barh(y_pos, values, align='center', alpha=0.4, color=colours)
-                pyplot.yticks(y_pos, keys)
-                pyplot.title(graph.getTitle())
-                """
+                keys        =   graph.getKeys()
+                ind         =   numpy.arange(len(keys))
+                fig, ax     =   pyplot.subplots()
+                values  =   [ graph.getValue(key) for key in keys ]
+                colours =   [ self.__getColour(key,graph.getDefaultColour()) for key in keys]
+                rect    =   ax.barh(ind, values, color=colours,edgecolor = "none")
+                ax.set_title(graph.getTitle())
+                ax.set_yticks(ind)
+                ax.set_yticklabels( keys )
                 ax.set_ylim(0,len(keys))
                 ax.tick_params('both', length=0, width=0, which='minor')
                 ax.yaxis.set_major_formatter(ticker.NullFormatter())
-                ax.yaxis.set_minor_locator(ticker.FixedLocator(len(keys)/2.0 + y_pos))
+                ax.yaxis.set_minor_locator(ticker.FixedLocator(0.5 + ind))
                 ax.yaxis.set_minor_formatter(ticker.FixedFormatter(keys))
-                """
             elif isinstance(graph,PercentHeatMap):
                 pyplot.rc('xtick', labelsize=6) 
                 pyplot.rc('xtick', labelsize=6) 
