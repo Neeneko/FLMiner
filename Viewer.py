@@ -54,8 +54,8 @@ if __name__ == "__main__":
     for heatMapOrigin in profileDb.GetDegreeOrigins():
         profileName = profileDb.GetProfileName(heatMapOrigin)
         sys.stderr.write("\tStarting [%s][%s]\n" % (heatMapOrigin,profileName))
-        values  =   profileDb.GetProfiles("Degrees.Degree","Age",filterEqField=("GenderGroup","Female"),filterGtField=("Degrees.Degree",0))
-        totals  =   profileDb.GetProfiles("Degrees.Degree","Age",filterGtField=("Degrees.Degree",0))
+        values  =   profileDb.GetProfiles("Degrees.Degree","Age",filterEqField=("GenderGroup","Female","Degrees.DstId",heatMapOrigin),filterGtField=("Degrees.Degree",0))
+        totals  =   profileDb.GetProfiles("Degrees.Degree","Age",filterEqField=("Degrees.DstId",heatMapOrigin),filterGtField=("Degrees.Degree",0))
         heatMap =   PercentHeatMap("Percent Women from %s" % profileName,values_rows=values,totals_rows=totals)
         sys.stderr.write("\tDone [%s][%s]\n" % (heatMapOrigin,profileName))
         reportData.Graphs.append(heatMap)

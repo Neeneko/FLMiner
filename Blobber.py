@@ -145,7 +145,8 @@ class ProfileDb(object):
             filters.append("CrawlDate-LastActivity < %d" % kwargs["activeInDays"])
 
         if "filterEqField" in kwargs:
-            filters.append("%s=\"%s\"" % kwargs["filterEqField"])
+            for idx in range(len(kwargs["filterEqField"])/2):
+                filters.append("%s=\"%s\"" % (kwargs["filterEqField"][idx*2],kwargs["filterEqField"][1+idx*2]))
 
         if "filterGtField" in kwargs:
             filters.append("%s>\"%s\"" % kwargs["filterGtField"])

@@ -1,5 +1,6 @@
 import optparse
 import sys
+import array
 from Profile import Profile
 from Blobber import CreateMemoryOnlyBlob,LoadSavedBlob
 
@@ -22,89 +23,17 @@ def getOtherProfiles(profile_db,profile_id):
     f =   set([ x[0] for x in profile_db.RunRawQuery("SELECT DstId from Friends WHERE ID=?",profile_id)])
     return r|f
 #------------------------------------------------------------------------------------------------
-def clearNetwork(profile_db):
-    sys.stderr.write("Clearing Network\n")
-    profile_db.RunRawQuery("UPDATE Profiles Set Degree=-1")
-    sys.stderr.write("Cleared Network\n")
-
-def spiderFix(profile_db,profile_id):
-    pending                 =   set( [profile_id] )
-    while len(pending) > 0:
-        profileId   =   pending.pop()
-        nextDegree  =   getProfileDegree(profile_db,profileId) + 1
-        for otherId in getOtherProfiles(profile_db,profileId):
-            if otherId not in profile_db.GLOBAL_PROFILE_IDS:
-                pass
-            elif getProfileDegree(profile_db,otherId) == -1:
-                pass
-            elif getProfileDegree(profile_db,otherId)  > nextDegree:
-                setProfileDegree(profile_db,otherId,nextDegree)
-                pending.add(otherId)
-
-def buildNetwork(profile_db,origin):
-    sys.stderr.write("Building Network from [%s]\n" % origin)
-
-    profile_db.RunRawQuery("UPDATE Profiles Set Degree=0 WHERE Id=?",origin)
-    pending                         =   set( [origin] )
-    complete                        =   0
-    loops                           =   0
-    jumps                           =   0
-    bad                             =   0
-    profile_db.GLOBAL_PROFILE_IDS   =   profile_db.GetAllProfileIds()
-    remaining                       =   len(profile_db.GLOBAL_PROFILE_IDS)
-    maxDegree                       =   0
-    while len(pending) > 0:
-        sys.stderr.write("Complete [%8d] Loops [%8d] Jumps [%8d] Bad [%8d] Max Degree [%2d] Remaining [%8d]\n" % (complete,loops,jumps,bad,maxDegree,remaining))
-        profileId   =   pending.pop()
-        nextDegree  =   getProfileDegree(profile_db,profileId) + 1
-        maxDegree   =   max(nextDegree,maxDegree)
-        for otherId in getOtherProfiles(profile_db,profileId):
-            if otherId not in profile_db.GLOBAL_PROFILE_IDS:
-                bad += 1
-            elif getProfileDegree(profile_db,otherId) == -1:
-                setProfileDegree(profile_db,otherId,nextDegree)
-                pending.add(otherId)
-            elif getProfileDegree(profile_db,otherId) > nextDegree:
-                jumps   +=  1
-                setProfileDegree(profile_db,otherId,nextDegree)
-                spiderFix(profile_db,otherId)
-            else:
-                loops   +=  1
-
-        complete    += 1
-        remaining   -= 1
-
-    return
-
-def checkNetwork(profile_db):
-    return
-    errorHigh   =   0
-    errorLow    =   0
-    sys.stderr.write("Checking Network\n")
-    for profile in profiles.itervalues():
-        for otherUID in profile.getOtherProfiles():
-            other   =   profiles.get(otherUID,None)
-            if other is None:
-                pass
-            elif other.Degree > (profile.Degree + 1):
-                errorHigh   += 1
-            elif other.Degree < (profile.Degree -1):
-                errorLow    += 1
-
-    sys.stderr.write("Errors: Too High [%d] Too Low [%d]\n" % (errorHigh,errorLow))
-
 class NetworkBuilder(object):
 
     def __init__(self,db):
-        self.__db   =   db
-        cursor      =   db.GetCursor()
+        self.__db       =   db
+        cursor          =   db.GetCursor()
         sys.stderr.write("Init Network Builder\n")
-        maxId           =   self.__db.RunRawQuery("SELECT MAX(Id) from Profiles")[0][0]
-        sys.stderr.write("Max Id [%s]\n" % maxId)
+        self.__maxId    =   self.__db.RunRawQuery("SELECT MAX(Id) from Profiles")[0][0]
+        sys.stderr.write("Max Id [%s]\n" % self.__maxId)
         self.__allIds   =   self.__db.GetAllProfileIds()
-        #self.__degrees  =   dict.fromkeys(self.__allIds,-1)
-        self.__degrees  =   [-1] * (maxId+1)
-        self.__otherIds =   [None] * (maxId+1)
+        self.__degrees  =   self.__buildByteArray(self.__maxId+1,-1)
+        self.__otherIds =   [None] * (self.__maxId+1)
         sys.stderr.write("Relationships\n")
         cursor.execute("SELECT DISTINCT Id,DstId from Relationships")
         count   =   0
@@ -117,8 +46,8 @@ class NetworkBuilder(object):
             if count%(1024*1024) == 0:
                 sys.stderr.write("\t[%s]\n" % count)
             if self.__otherIds[row[0]] is None:
-                self.__otherIds[row[0]] = set()
-            self.__otherIds[row[0]].add(row[1])
+                self.__otherIds[row[0]] = self.__buildLongArray(0,0)
+            self.__otherIds[row[0]].append(row[1])
             del row
         sys.stderr.write("Friends\n")
         cursor.execute("SELECT Id,DstId from Friends")
@@ -132,10 +61,31 @@ class NetworkBuilder(object):
             if count%(1024*1024) == 0:
                 sys.stderr.write("\t[%s]\n" % count)
             if self.__otherIds[row[0]] is None:
-                self.__otherIds[row[0]] = set()
-            self.__otherIds[row[0]].add(row[1])
+                self.__otherIds[row[0]] = self.__buildLongArray(0,0)
+            self.__otherIds[row[0]].append(row[1])
             del row
         sys.stderr.write("Fini Network Builder\n")
+
+    def __buildLongArray(self,size,default):
+        if size == 0:
+            return array.array('L')
+        sys.stderr.write("Building Array of len [%s]\n" % size)
+        rv  =   array.array('L')
+        for _ in range(size):
+            rv.append(default)
+        sys.stderr.write("Done\n")
+        return rv
+
+    def __buildByteArray(self,size,default):
+        if size == 0:
+            return array.array('b')
+        sys.stderr.write("Building Array of len [%s]\n" % size)
+        rv  =   array.array('b')
+        for _ in range(size):
+            rv.append(default)
+        sys.stderr.write("Done\n")
+        return rv
+
 
     def clearNetwork(self,profile_id=None):
         sys.stderr.write("Clearing Network [%s]\n" % profile_id)
@@ -144,59 +94,52 @@ class NetworkBuilder(object):
         else:
             self.__db.RunRawQuery("DELETE FROM Degrees WHERE DstId=?", profile_id)
 
-        maxId           =   self.__db.RunRawQuery("SELECT MAX(Id) from Profiles")[0][0]
-        self.__degrees  =   [-1] * (maxId+1)
-        #self.__degrees  =   dict.fromkeys(self.__allIds,-1)
+        self.__degrees  =   self.__buildByteArray(self.__maxId+1,-1)
         sys.stderr.write("Cleared Network\n")
-
-    def spiderFix(self,profile_id):
-        pending                 =   set( [profile_id] )
-        while len(pending) > 0:
-            profileId   =   pending.pop()
-            nextDegree  =   self.__degrees[profileId] + 1
-            for otherId in self.__otherIds[profileId]:
-                if otherId not in self.__allIds:
-                    pass
-                elif self.__degrees[otherId] == -1:
-                    pass
-                elif self.__degrees[otherId]  > nextDegree:
-                    self.__degrees[otherId] = nextDegree
-                    pending.add(otherId)
 
     def buildNetwork(self,origin):
         sys.stderr.write("Building Network from [%s]\n" % origin)
-        pending                         =   set( [origin] )
-        self.__degrees[origin]          =   0
-        complete                        =   0
-        loops                           =   0
-        jumps                           =   0
-        bad                             =   0
-        remaining                       =   len(self.__allIds)
-        maxDegree                       =   0
-        while len(pending) > 0:
-            sys.stderr.write("Complete [%8d] Loops [%8d] Jumps [%8d] Bad [%8d] Max Degree [%2d] Remaining [%8d]\n" % (complete,loops,jumps,bad,maxDegree,remaining))
-            profileId   =   pending.pop()
-            nextDegree  =   self.__degrees[profileId]+1
-            maxDegree   =   max(nextDegree,maxDegree)
-            sys.stderr.write("\tProfileId [%s] NextDegree [%s] OtherIds [%s]\n" % (profileId,nextDegree,len(self.__otherIds[profileId])))
-            otherCount  =   0
-            for otherId in self.__otherIds[profileId]:
-                otherCount += 1
-                if otherCount%1024==0:
-                    sys.stderr.write("\t\tOtherIds [%s]\n" % otherCount)
-                if otherId not in self.__allIds:
-                    bad += 1
-                elif self.__degrees[otherId] == -1:
-                    self.__degrees[otherId] = nextDegree
-                    pending.add(otherId)
-                elif self.__degrees[otherId]  > nextDegree:
-                    self.__degrees[otherId] = nextDegree
-                    jumps   +=  1
-                    self.spiderFix(otherId)
-                else:
-                    loops   +=  1
-            complete    += 1
-            remaining   -= 1
+        cIds        =   array.array('L',[origin])
+        degree      =   0
+        tickSize    =   5
+        while True:
+            didChange   =   0
+            nIds        =   array.array('L')
+            total       =   len(cIds)
+            sys.stderr.write("Degree [%s] Profiles [%12s][" % (degree,total))
+            count       =   0
+            nextTick    =   tickSize
+            while True:
+                try:
+                    profileId   =   cIds.pop()
+                except IndexError:
+                    break
+                count   +=  1
+                if 100*count/total > nextTick:
+                    sys.stderr.write(".")
+                    #sys.stderr.write("count [%s] total [%s] nextTick [%s] thisTick [%s]\n" % (count, total,nextTick, 100*count/total))
+                    nextTick += tickSize
+ 
+
+                if profileId > self.__maxId:
+                    continue
+ 
+                if self.__degrees[profileId] != -1:
+                    continue
+
+                self.__degrees[profileId]   =   degree
+                didChange                   +=  1
+
+                if self.__otherIds[profileId] is None:
+                    continue
+                nIds.extend(self.__otherIds[profileId])
+            sys.stderr.write("] - [%12s]\n" % didChange)
+
+            if len(nIds) == 0 or didChange == 0:
+                break
+
+            cIds    =   nIds
+            degree  +=  1
 
     def writeNetwork(self,origin):
         sys.stderr.write("Start Batch Insert of Network\n")
