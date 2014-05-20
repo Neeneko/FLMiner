@@ -15,7 +15,41 @@ def debug(mesg):
 class ProfileDb(object):
 
     def __init__(self,file_name):
-        self.__db   =   sqlite3.connect(file_name,detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        self.__db           =   sqlite3.connect(file_name,detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        self.__loadEnums()
+
+    def __getEnum(self,text,source):
+        if text in self.__enums:
+            return self.__enums[text]
+
+        newId               =   len(self.__enums)
+        self.__enums[text]  =   newId
+        self.__db.execute("INSERT INTO Enums VALUES(?,?,?)",(newId,text,source))
+        if source not in self.__enumSrcList:
+            self.__enumSrcList.append(source)
+        return newId
+
+    def __clearEnums(self):
+        self.__enums        =   {}
+        self.__enumSrcList  =   []
+        cursor              =   self.__db.cursor()
+        cursor.execute("DROP TABLE IF EXISTS Enums")
+        cursor.execute("CREATE TABLE Enums (Enum INT, Value TEXT, SrcTable TEXT)")
+
+    def __loadEnums(self):
+        cursor              =   self.__db.cursor()
+        cursor.execute("SELECT * FROM Enums")
+        self.__enums        =   {}
+        while True:
+            row = cursor.fetchone()
+            if row is None:
+                break
+            self.__enums[row[1]]    =   row[0]
+        cursor.execute("SELECT DISTINCT SrcTable FROM Enums")
+        self.__enumSrcList  =   [x[0] for x in cursor.fetchall()]
+ 
+    def __getEnumSrcList(self):
+        return self.__enumSrcList
 
     def Clear(self):
         cursor = self.__db.cursor()
@@ -40,8 +74,7 @@ class ProfileDb(object):
         createString += "GenderGroup TEXT)"
         cursor.execute(createString)
 
-        cursor.execute("DROP TABLE IF EXISTS Enums")
-        cursor.execute("CREATE TABLE Enums (Enum INT, Value TEXT, SrcTable TEXT)")
+        self.__clearEnums()
 
         for field in Profile.LIST_FIELDS:
             cursor.execute("DROP TABLE IF EXISTS %s" % field)
@@ -60,10 +93,19 @@ class ProfileDb(object):
         cursor.execute("DROP TABLE IF EXISTS ProfileToFetish")
         cursor.execute("CREATE TABLE ProfileToFetish(ProfileId INT, FetishId INT, Enum INT)")
 
-
         cursor.execute("DROP TABLE IF EXISTS Degrees")
         cursor.execute("CREATE TABLE Degrees (Id INT, DstId INT, Degree INT)")
 
+        cursor.execute("DROP TABLE IF EXISTS IdentGroups")
+        cursor.execute("CREATE TABLE IdentGroups(Ident TEXT, IdentGroup TEXT)")
+
+        self.__db.commit()
+
+    def InitIdentGroups(self,ident_map):
+        cursor = self.__db.cursor()
+        for k,v in ident_map.iteritems():
+            for vv in v:
+                cursor.execute("INSERT INTO IdentGroups VALUES(?,?)",(k,vv))
         self.__db.commit()
 
     def GetCursor(self):
@@ -111,13 +153,15 @@ class ProfileDb(object):
         assert len(rows) == 1
         return rows[0][0]
  
+    def GetProfileCount(self,**kwargs):
+        rows        =   self.GetProfiles("COUNT(*)",**kwargs)
+        return int(rows[0][0])
+
     def GetProfiles(self,*args,**kwargs):
         cursor      =   self.__db.cursor()
         sString     =   "Profiles"
         cString     =   ""
         filters     =   []
-        cursor.execute("SELECT DISTINCT SrcTable FROM Enums")
-        eNumTables  =   [x[0] for x in cursor.fetchall()]
         for idx in range(len(args)):
             if idx != 0:
                 cString += ","
@@ -125,16 +169,16 @@ class ProfileDb(object):
 
                 splitList = re.split("\.",args[idx])
                 table = splitList[0]
-                if table in eNumTables and "Enums" not in sString:
+                if table in self.__getEnumSrcList() and "Enums" not in sString:
                     sString += ",Enums"
 
                 if table not in sString:
                     sString += ",%s" % table
                     filters.append("Profiles.Id = %s.Id" % table)
-                    if table in eNumTables:
+                    if table in self.__getEnumSrcList():
                         filters.append("Enums.Enum = %s" % args[idx])
 
-                if table in eNumTables:
+                if table in self.__getEnumSrcList():
                     cString += "Enums.Value"
                 else:
                     cString += args[idx]
@@ -172,7 +216,6 @@ class ProfileDb(object):
         return [x[0] for x in cursor.fetchall()]
 
     def AddProfile(self,profile):
-        debug("Adding Profile [%s]" % profile.Id) 
         cursor = self.__db.cursor()
 
         insertString    =   "INSERT INTO Profiles VALUES("
@@ -198,7 +241,6 @@ class ProfileDb(object):
             else:
                 splitList = re.split('/',getattr(profile,field))
                 args.append(date(int(splitList[2]),int(splitList[1]),int(splitList[0])).toordinal())
-            #args.append(getattr(profile,field))
 
         insertString += "?)"
         if profile.Gender in Profile.GENDER_GROUP_MALE:
@@ -214,70 +256,22 @@ class ProfileDb(object):
             for value in getattr(profile,field):
                 cursor.execute("INSERT INTO %s VALUES(?,?)" % field,(profile.Id,value))
 
-        cursor.execute("SELECT * FROM Enums")
-        enumRows =   cursor.fetchall()
-
         for field in Profile.LIST_TUPLE_FIELDS:
             for (dst,text) in getattr(profile,field):
-                if text not in [ x[1] for x in enumRows]:
-                    #sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
-                    if len(enumRows) == 0:
-                        nextId  =   0   
-                    else:
-                        nextId      =   max([x[0] for x in enumRows])+1
-                    cursor.execute("INSERT INTO Enums VALUES(?,?,?)",(nextId,text,field))
-                    cursor.execute("SELECT * FROM Enums")
-                    enumRows    =   cursor.fetchall()
-                thisId  =   None
-                for enumId,enumText,_ in enumRows:
-                    if enumText == text:
-                        thisId = enumId
-                        break
+                thisId  =   self.__getEnum(text,field)
                 cursor.execute("INSERT INTO %s VALUES(?,?,?)" % field,(profile.Id,dst,thisId))
 
         for field in Profile.LIST_FIELDS:
             for text in getattr(profile,field):
-                if text not in [ x[1] for x in enumRows]:
-                    #sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
-                    if len(enumRows) == 0:
-                        nextId  =   0   
-                    else:
-                        nextId      =   max([x[0] for x in enumRows])+1
-                    cursor.execute("INSERT INTO Enums VALUES(?,?,?)",(nextId,text,field))
-                    cursor.execute("SELECT * FROM Enums")
-                    enumRows    =   cursor.fetchall()
-                thisId  =   None
-                for enumId,enumText,_ in enumRows:
-                    if enumText == text:
-                        thisId = enumId
-                        break
+                thisId  =   self.__getEnum(text,field)
                 cursor.execute("INSERT INTO %s VALUES(?,?)" % field,(profile.Id,thisId))
 
         stringMap   =   StringMap()
-        #cursor.execute("CREATE TABLE Fetishes (Id INTEGER PRIMARY KEY, Name TEXT)")
-        #cursor.execute("CREATE TABLE ProfileToFetish(ProfileId INT, FetishId INT, Relation TEXT)")
         for field in Profile.FETISH_FIELDS:
-            debug("\t[%s] - [%s]" % (field,len(getattr(profile,field))))
             for (text,values) in getattr(profile,field).iteritems():
-                if text not in [ x[1] for x in enumRows]:
-                    #sys.stderr.write("Enum [%s] not in DB, Adding\n" % text.encode("utf-8"))
-                    if len(enumRows) == 0:
-                        nextId  =   0   
-                    else:
-                        nextId      =   max([x[0] for x in enumRows])+1
-                    cursor.execute("INSERT INTO Enums VALUES(?,?,?)",(nextId,text,field))
-                    cursor.execute("SELECT * FROM Enums")
-                    enumRows    =   cursor.fetchall()
-                thisId  =   None
-                for enumId,enumText,_ in enumRows:
-                    if enumText == text:
-                        thisId = enumId
-                        break
- 
-                debug("\t\t[%s][%s] - [%s]" % (text,thisId,len(values)))
+                thisId  =   self.__getEnum(text,field)
                 for value in values:
                     fetish    =   stringMap.getString("Fetish",value)
-                    debug("\t\t\t[%s] - [%s]" % (value,fetish))
                     cursor.execute("SELECT COUNT(*) FROM Fetishes WHERE Name=?",[fetish])
                     if cursor.fetchall()[0][0] == 0:
                         cursor.execute("INSERT INTO Fetishes VALUES(?,?)", (value,fetish))
@@ -295,18 +289,21 @@ def CreateLiveBlob(file_name):
         profileDb.FillSection(section,progress.getIds(section))
     uids        =   set(progress.getIds("CompletedProfiles"))
     sys.stderr.write("Profiles to load: [%s]\n" % len(uids))
-    count       =   0
+    loaded      =   0
+    failed      =   0
+    total       =   len(uids)
     for uid in uids:
-        if count%1024 == 0:
-            sys.stderr.write("Progress - Loaded [%s]\n" % count)
         profile =   Profile(uid)
         if(profile.load()):
             profileDb.AddProfile(profile)
+            loaded   += 1
+            sys.stderr.write("Progress - Loaded Profile [%12s], [%12s] of [%12s], [%3s%% Done]\n" % (uid,loaded,total,100*(loaded+failed)/total))
         else:
             progress.errorProfile(uid)
+            failed  += 1
+            sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (uid,failed,total,100*(laoded+failed)/total))
         del profile
-        count += 1
-    sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (len(profileDb.GetAllProfileIds()),len(progress.getIds("ErrorProfiles"))))
+    sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (loaded,failed))
     return profileDb
  
 def CreateMemoryOnlyBlob():
