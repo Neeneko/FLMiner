@@ -301,7 +301,7 @@ def CreateLiveBlob(file_name):
         else:
             progress.errorProfile(uid)
             failed  += 1
-            sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (uid,failed,total,100*(laoded+failed)/total))
+            sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (uid,failed,total,100*(loaded+failed)/total))
         del profile
     sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (loaded,failed))
     return profileDb
