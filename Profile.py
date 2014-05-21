@@ -6,17 +6,126 @@ from datetime import date,datetime
 import cPickle as Pickle
 import ConfigParser
 
+class Group(object):
+
+    NO_OWNER                =   "-1"
+    NEVER_ACTIVE            =   "Never"
+    MISSING_CRAWL_DATE      =   "Never"
+
+    def __init__(self,gid):
+        self.Id             =   int(gid)
+        self.Name           =   None
+        self.Membership     =   0
+        self.Profiles       =   set()
+        self.Owner          =   Group.NO_OWNER
+        self.Mods           =   set()
+        self.TooBig         =   False
+        self.CrawlDate      =   Group.MISSING_CRAWL_DATE
+        self.LastActivity   =   Group.NEVER_ACTIVE
+
+    def getProfiles(self):
+        return self.Profiles
+
+    def getLastActivity(self):
+        if self.LastActivity == Group.NEVER_ACTIVE:
+            return date(1970,1,1)
+        else:
+            splitList = re.split('/',self.LastActivity)
+            return date(int(splitList[2]),int(splitList[1]),int(splitList[0]))
+
+    def getCrawlDate(self):
+        if self.CrawlDate == Group.MISSING_CRAWL_DATE:
+            return date(1970,1,1)
+        else:
+            splitList = re.split('/',self.CrawlDate)
+            return date(int(splitList[2]),int(splitList[1]),int(splitList[0]))
+
+    def setCrawlDate(self,time_stamp=None):
+        if time_stamp is None:
+            now                 =   date.today()
+        else:
+            now = datetime.utcfromtimestamp(time_stamp)
+        self.CrawlDate      =   "%s/%s/%s" % (now.day,now.month,now.year)
+
+    def validate(self):
+        for k,v in vars(self).iteritems():
+            try:
+                Pickle.dumps(v)
+            except TypeError:
+                return "No, Picle Failed : Field [%s] Value [%s]\n" % (k,v)
+        return "Yes"
+
+    def save(self):
+        if not os.path.exists("Groups"):
+            os.mkdir("Groups")
+        fileName = os.path.join("Groups","%s.dat" % self.Id)
+        with open(fileName,"wb") as fp:
+            Pickle.dump(vars(self),fp)
+            fp.flush()
+            os.fsync(fp.fileno())
+
+    def load(self):
+        fileName = os.path.join("Groups","%s.dat" % self.Id)
+        if os.path.exists(fileName):
+            try:
+                with open(fileName,"rb") as fp:
+                    for k,v in Pickle.load(fp).iteritems():
+                        setattr(self,k,v)
+                return True
+            except Exception:
+                sys.stderr.write("Failed to load grouop [%s]\n" % self.Id)
+                traceback.print_exc(sys.stderr)
+                return False
+        else:
+            return False
+
+    def __str__(self):
+        rv = "\n"
+        rv +=   "Profile\n"
+        rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Name",self.Name)
+        rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Membership",self.Membership)
+        rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Profiles",len(self.Profiles))
+        rv +=   "[%s][%16s][%32s]\n" % (self.Id,"TooBig",self.TooBig)
+        rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Last Activity",self.LastActivity)
+        rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Crawl Date",self.CrawlDate)
+        rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Owner",self.Owner)
+        #-----------------------------------------------
+        rv +=   "[%s][%16s]" % (self.Id,"Mods")
+        if len(self.Mods) == 0:
+            rv += "\n"
+        else:
+            first   =   True
+            for k in self.Mods:
+                if not first:
+                    rv += "[%s] %16s " % (self.Id,"")
+                else:
+                    first = False
+                rv += "[%32s]\n" % (k)
+ 
+        return rv
 
 class Profile(object):
 
     DEFAULT_ANSWER          =   "No Answer"
     NEVER_ACTIVE            =   "Never"
     MISSING_CRAWL_DATE      =   "Never"
+    #-----------------------------------------------
     GENDER_GROUP_MALE       =   ["M","FtM"]
     GENDER_GROUP_FEMALE     =   ["F","FEM","MtF"]
     GENDER_MALE_TITLE       =   "Male"
     GENDER_FEMALE_TITLE     =   "Female"
     GENDER_OTHER_TITLE      =   "Other"
+    #-----------------------------------------------
+    IDENTITY_GROUPS         =   {
+                                    "Top":      ["Top","Sadist","Mistress","Master","Domme","Dom","Daddy"],
+                                    "Bottom":   ["sub","slave","pet","brat","babygirl","Masochist"],
+                                    "Swtich":   ["Switch","Sadomasochist"],
+                                    "Age":      ["babygirl","Daddy"],
+                                    "Theme":    ["pet","Vanilla","Primal","Kinkster","Hedonist"],
+                                    "Ds":       ["sub","Domme","Dom","brat"],
+                                    "Ms":       ["slave","Master","Mistress"],
+                                    "SM":       ["Sadist","Masochist","Sadomasochist"] 
+                                }
 
     INT_FIELDS              =   ["Id","Age"]
     TEXT_FIELDS             =   ["Name","Gender","Type","Orientation","Active"]
@@ -43,6 +152,7 @@ class Profile(object):
         self.Degree         =   None
         self.Into           =   {}
         self.Curious        =   {}
+        self.Groups         =   set()
 
     def getOtherProfiles(self):
         return set(self.Friends) | set([x for (x,_) in self.Relationships])
@@ -122,6 +232,7 @@ class Profile(object):
         rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Active",self.Active)
         rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Last Activity",self.LastActivity)
         rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Crawl Date",self.CrawlDate)
+        rv +=   "[%s][%16s][%32s]\n" % (self.Id,"Groups",len(self.Groups))
         #-----------------------------------------------
         rv +=   "[%s][%16s]" % (self.Id,"Location")
         if len(self.Location) == 0:

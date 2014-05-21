@@ -300,6 +300,7 @@ def LoadSavedBlob(file_name):
     return ProfileDb(file_name)
 
 def CreateLiveBlob(file_name):
+<<<<<<< HEAD
     with ProfileDb(file_name) as profileDb:
         #profileDb   =   ProfileDb(file_name)
         profileDb.Clear()
@@ -327,6 +328,31 @@ def CreateLiveBlob(file_name):
             del profile
         sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (loaded,failed))
         return profileDb
+=======
+    profileDb   =   ProfileDb(file_name)
+    profileDb.Clear()
+    progress    =   Progress()
+    for section in Progress.SECTIONS:
+        profileDb.FillSection(section,progress.getIds(section))
+    uids        =   set(progress.getIds("CompletedProfiles"))
+    sys.stderr.write("Profiles to load: [%s]\n" % len(uids))
+    loaded      =   0
+    failed      =   0
+    total       =   len(uids)
+    for uid in uids:
+        profile =   Profile(uid)
+        if(profile.load()):
+            profileDb.AddProfile(profile)
+            loaded   += 1
+            sys.stderr.write("Progress - Loaded Profile [%12s], [%12s] of [%12s], [%3s%% Done]\n" % (uid,loaded,total,100*(loaded+failed)/total))
+        else:
+            progress.errorProfile(uid)
+            failed  += 1
+            sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (uid,failed,total,100*(loaded+failed)/total))
+        del profile
+    sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (loaded,failed))
+    return profileDb
+>>>>>>> a71b01596d2779451801592efcca21a72173271d
  
 def CreateMemoryOnlyBlob():
     return CreateLiveBlob(":memory:")

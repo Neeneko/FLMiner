@@ -1,6 +1,7 @@
 import optparse
 import sys
 import array
+import re
 from Profile import Profile
 from Blobber import CreateMemoryOnlyBlob,LoadSavedBlob
 
@@ -173,7 +174,7 @@ class NetworkBuilder(object):
 if __name__ == "__main__":
     usage       =   "usage: %prog [options]"
     parser = optparse.OptionParser(usage=usage)
-    parser.add_option('-o', '--origin', help="profile number to start from", type='int', default=None)
+    parser.add_option('-o', '--origin', help="profile number to start from", type='string', default=None)
     parser.add_option('-c', '--clear', help="clear degree map",action="store_true",default=False)
     parser.add_option('-b', '--blob', help="user the blob rather then loading profiles", action="store",default=None)
 
@@ -190,17 +191,20 @@ if __name__ == "__main__":
         profileDb   =   CreateMemoryOnlyBlob()
 
     sys.stderr.write("Loaded [%d] Profiles\n" % len(profileDb.GetAllProfileIds()))
-    if options.origin not in profileDb.GetAllProfileIds() and options.clear is False:
-        sys.stderr.write("Profile Id [%s] not in provided data set\n" % options.origin)
-        sys.exit(0)
+    originList  =   [int(x) for x in re.split(",",options.origin)]
+    for origin in originList:
+        if origin not in profileDb.GetAllProfileIds() and options.clear is False:
+            sys.stderr.write("Profile Id [%s] not in provided data set\n" % origin)
+            sys.exit(0)
     try:
         networkBuilder  =   NetworkBuilder(profileDb)
         if options.clear:
             networkBuilder.clearNetwork(options.origin)
         else:
-            networkBuilder.clearNetwork(options.origin)
-            networkBuilder.buildNetwork(options.origin)
-            networkBuilder.writeNetwork(options.origin)
+            for origin in originList:
+                networkBuilder.clearNetwork(origin)
+                networkBuilder.buildNetwork(origin)
+                networkBuilder.writeNetwork(origin)
     finally:
         profileDb.Close() 
 

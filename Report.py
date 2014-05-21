@@ -9,11 +9,18 @@ def log(message):
 
 class MultiGraph(object):
 
-    def __init__(self,title,rows=[],vertical=True):
+    def __init__(self,title,rows=[],vertical=True,preserve_order=False,sort_by_value=False):
         self.__title        =   title
         self.__data         =   {}
-        self.__keys         =   set()
+        self.__keys         =   []
         self.__vertical     =   vertical
+        if preserve_order and sort_by_value:
+            raise RuntimeError
+        self.__sortByValue  =   sort_by_value
+        if preserve_order:
+            self.__order        =   []
+        else:
+            self.__order        =   None
         for row in rows:
             self.incValue(row[0],row[1],1)
 
@@ -26,23 +33,52 @@ class MultiGraph(object):
     def getTitle(self):
         return self.__title
 
-    def incValue(self,z,key,value):
-        if z not in self.__data:
-            self.__data[z]      =   {}
-        if key not in self.__data[z]:
-            self.__data[z][key] =   0
+    def incValue(self,cat,key,value):
+        if cat not in self.__data:
+            self.__data[cat]      =   {}
+            if self.__order is not None:
+                self.__order =  [cat] + self.__order
+        if key not in self.__data[cat]:
+            self.__data[cat][key] =   0
             if key not in self.__keys:
-                self.__keys.add(key)
-        self.__data[z][key]     +=  value
+                self.__keys =   [key] + self.__keys
+        self.__data[cat][key]     +=  value
+
+    def setValue(self,cat,key,value):
+        if cat not in self.__data:
+            self.__data[cat]      =   {}
+            if self.__order is not None:
+                self.__order = [cat] + self.__order
+        if key not in self.__data[cat]:
+            self.__data[cat][key] =   0
+            if key not in self.__keys:
+                self.__keys =   [key] + self.__keys
+        self.__data[cat][key] =  value
 
     def getValue(self,cat,key):
         return self.__data.get(cat,{}).get(key,0)
 
     def getCats(self):
-        return self.__data.keys()
+        sys.stderr.write("Cats [%s] Order [%s]\n" % (self.__data.keys(),self.__order)) 
+        if self.__order is not None:  
+            return sorted(self.__order)
+        else:
+            return self.__data.keys()
 
     def getKeys(self):
-        return self.__keys
+        sys.stderr.write("Keys [%s] Order [%s]\n" % (self.__keys,self.__order)) 
+        if self.__order is not None:
+            return self.__keys
+        elif self.__sortByValue:
+            tmp =   {}
+            for key in self.__keys:
+                tmp[key] = 0
+            for v in self.__data.values():
+                for k,vv in v.iteritems():
+                    tmp[k] += vv
+            return sorted(tmp,key=tmp.get)
+        else:
+            return sorted(self.__keys)
 
 class PercentHeatMap(object):
 
@@ -74,9 +110,12 @@ class PercentHeatMap(object):
 
 class SimpleGraph(object):
 
-    def __init__(self,title,preserve_order=False,rows=[],default_colour=None):
+    def __init__(self,title,preserve_order=False,rows=[],default_colour=None,sort_by_value=False,highlight=None):
         self.__title            =   title
         self.__Data             =   {}
+        if preserve_order and sort_by_value:
+            raise RuntimeError
+        self.__sortByValue      =   sort_by_value
         if preserve_order:
             self.__order        =   []
         else:
@@ -84,12 +123,23 @@ class SimpleGraph(object):
         self.__defaultColour    =   default_colour
         for row in rows:
             self.incValue(row[0],1)
+        self.__highlight        =   highlight
 
     def getTitle(self):
         return self.__title
 
     def getDefaultColour(self):
         return self.__defaultColour
+
+    def getHighlight(self,key):
+        if self.__highlight is None:
+            return "Grey"
+        if isinstance(self.__highlight,basestring):
+            return self.__highlight
+        if key in self.__highlight:
+            return "Yellow"
+        else:
+            return "White"
 
     def setValue(self,x,value):
         if x not in self.__Data and self.__order is not None:
@@ -112,6 +162,8 @@ class SimpleGraph(object):
     def getKeys(self):
         if self.__order:
             return self.__order
+        elif self.__sortByValue:
+            return sorted(self.__Data,key=self.__Data.get)
         else:
             return sorted(self.__Data.keys())
 
@@ -196,7 +248,12 @@ class ReportManager(object):
                 fig, ax     =   pyplot.subplots()
                 values  =   [ graph.getValue(key) for key in keys ]
                 colours =   [ self.__getColour(key,graph.getDefaultColour()) for key in keys]
-                rect    =   ax.barh(ind, values, color=colours,edgecolor = "none")
+                edgeColours =   []
+                for key in keys:
+                    edgeColours.append(graph.getHighlight(key))
+
+                #rect    =   ax.barh(ind, values, color=colours,edgecolor = "none")
+                rect    =   ax.barh(ind, values, color=colours,edgecolor = edgeColours)
                 ax.set_title(graph.getTitle())
                 ax.set_yticks(ind)
                 ax.set_yticklabels( keys )
@@ -275,8 +332,8 @@ class ReportManager(object):
                 sys.stderr.write("boundries - %s\n" % str(colorBar._boundaries))
                 pyplot.title(graph.getTitle())
             elif isinstance(graph,MultiGraph) and graph.getVertical():
-                keys        =   sorted(graph.getKeys())
-                cats        =   sorted(graph.getCats())
+                keys        =   graph.getKeys()
+                cats        =   graph.getCats()
                 ind         =   numpy.arange(len(keys))*len(cats)
                 fig, ax     =   pyplot.subplots()
                 for idx in range(len(graph.getCats())):
@@ -293,8 +350,8 @@ class ReportManager(object):
                 ax.xaxis.set_minor_locator(ticker.FixedLocator(len(cats)/2.0 + ind))
                 ax.xaxis.set_minor_formatter(ticker.FixedFormatter(keys))
             elif isinstance(graph,MultiGraph) and not graph.getVertical():
-                keys        =   sorted(graph.getKeys())
-                cats        =   sorted(graph.getCats())
+                keys        =   graph.getKeys()
+                cats        =   graph.getCats()
                 ind         =   numpy.arange(len(keys))*(len(cats))
                 fig, ax     =   pyplot.subplots()
                 for idx in range(len(graph.getCats())):
