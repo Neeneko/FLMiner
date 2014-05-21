@@ -2,7 +2,8 @@ import optparse
 import sys
 import os
 import re
-import cPickle as Pickle
+import pickle as Pickle
+#import cPickle as Pickle
 import sqlite3
 from datetime import date,datetime
 from Profile import Profile
@@ -18,10 +19,16 @@ class ProfileDb(object):
         self.__db           =   sqlite3.connect(file_name,detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
         self.__loadEnums()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.__db.commit()
+        self.__db.close()
+
     def __getEnum(self,text,source):
         if text in self.__enums:
             return self.__enums[text]
-
         newId               =   len(self.__enums)
         self.__enums[text]  =   newId
         self.__db.execute("INSERT INTO Enums VALUES(?,?,?)",(newId,text,source))
@@ -38,15 +45,21 @@ class ProfileDb(object):
 
     def __loadEnums(self):
         cursor              =   self.__db.cursor()
-        cursor.execute("SELECT * FROM Enums")
-        self.__enums        =   {}
-        while True:
-            row = cursor.fetchone()
-            if row is None:
-                break
-            self.__enums[row[1]]    =   row[0]
-        cursor.execute("SELECT DISTINCT SrcTable FROM Enums")
-        self.__enumSrcList  =   [x[0] for x in cursor.fetchall()]
+        cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE name=?",["Enums"])
+        row = cursor.fetchone()
+        if row[0] == 0:
+            self.__enums        =   {}
+            self.__enumSrcList  =   []
+        else:
+            cursor.execute("SELECT * FROM Enums")
+            self.__enums        =   {}
+            while True:
+                row = cursor.fetchone()
+                if row is None:
+                    break
+                self.__enums[row[1]]    =   row[0]
+            cursor.execute("SELECT DISTINCT SrcTable FROM Enums")
+            self.__enumSrcList  =   [x[0] for x in cursor.fetchall()]
  
     def __getEnumSrcList(self):
         return self.__enumSrcList
@@ -119,6 +132,12 @@ class ProfileDb(object):
         cursor = self.__db.cursor()
         for pid in pids:
             cursor.execute("INSERT INTO %s VALUES(?)" % (section),(int(pid),))
+        self.__db.commit()
+
+    def FillStrings(self,section,values):
+        cursor = self.__db.cursor()
+        for k,v in values.iteritems():
+            cursor.execute("INSERT INTO %s VALUES(?,?)" % (section),(k,v))
         self.__db.commit()
 
     def GetProfilesActiveInDays(self,days):
@@ -266,15 +285,14 @@ class ProfileDb(object):
                 thisId  =   self.__getEnum(text,field)
                 cursor.execute("INSERT INTO %s VALUES(?,?)" % field,(profile.Id,thisId))
 
-        stringMap   =   StringMap()
         for field in Profile.FETISH_FIELDS:
             for (text,values) in getattr(profile,field).iteritems():
                 thisId  =   self.__getEnum(text,field)
                 for value in values:
-                    fetish    =   stringMap.getString("Fetish",value)
-                    cursor.execute("SELECT COUNT(*) FROM Fetishes WHERE Name=?",[fetish])
-                    if cursor.fetchall()[0][0] == 0:
-                        cursor.execute("INSERT INTO Fetishes VALUES(?,?)", (value,fetish))
+                    #fetish    =   stringMap.getString("Fetish",value)
+                    #cursor.execute("SELECT COUNT(*) FROM Fetishes WHERE Name=?",[fetish])
+                    #if cursor.fetchall()[0][0] == 0:
+                    #    cursor.execute("INSERT INTO Fetishes VALUES(?,?)", (value,fetish))
                     cursor.execute("INSERT INTO ProfileToFetish VALUES(?,?,?)" ,(profile.Id,value,thisId))
         self.__db.commit()
 
@@ -282,29 +300,33 @@ def LoadSavedBlob(file_name):
     return ProfileDb(file_name)
 
 def CreateLiveBlob(file_name):
-    profileDb   =   ProfileDb(file_name)
-    profileDb.Clear()
-    progress    =   Progress()
-    for section in Progress.SECTIONS:
-        profileDb.FillSection(section,progress.getIds(section))
-    uids        =   set(progress.getIds("CompletedProfiles"))
-    sys.stderr.write("Profiles to load: [%s]\n" % len(uids))
-    loaded      =   0
-    failed      =   0
-    total       =   len(uids)
-    for uid in uids:
-        profile =   Profile(uid)
-        if(profile.load()):
-            profileDb.AddProfile(profile)
-            loaded   += 1
-            sys.stderr.write("Progress - Loaded Profile [%12s], [%12s] of [%12s], [%3s%% Done]\n" % (uid,loaded,total,100*(loaded+failed)/total))
-        else:
-            progress.errorProfile(uid)
-            failed  += 1
-            sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (uid,failed,total,100*(laoded+failed)/total))
-        del profile
-    sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (loaded,failed))
-    return profileDb
+    with ProfileDb(file_name) as profileDb:
+        #profileDb   =   ProfileDb(file_name)
+        profileDb.Clear()
+
+        stringMap   =   StringMap()
+        progress    =   Progress()
+        for section in Progress.SECTIONS:
+            profileDb.FillSection(section,progress.getIds(section))
+        profileDb.FillStrings("Fetishes",stringMap.getSection("Fetish"))
+        uids        =   set(progress.getIds("CompletedProfiles"))
+        sys.stderr.write("Profiles to load: [%s]\n" % len(uids))
+        loaded      =   0
+        failed      =   0
+        total       =   len(uids)
+        for uid in uids:
+            profile =   Profile(uid)
+            if(profile.load()):
+                profileDb.AddProfile(profile)
+                loaded   += 1
+                sys.stderr.write("Progress - Loaded Profile [%12s], [%12s] of [%12s], [%3s%% Done]\n" % (uid,loaded,total,100*(loaded+failed)/total))
+            else:
+                progress.errorProfile(uid)
+                failed  += 1
+                sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (uid,failed,total,100*(laoded+failed)/total))
+            del profile
+        sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (loaded,failed))
+        return profileDb
  
 def CreateMemoryOnlyBlob():
     return CreateLiveBlob(":memory:")
