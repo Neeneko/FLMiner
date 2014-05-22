@@ -154,6 +154,9 @@ class Profile(object):
         self.Curious        =   {}
         self.Groups         =   set()
 
+    def getGroups(self):
+        return self.Groups
+
     def getOtherProfiles(self):
         return set(self.Friends) | set([x for (x,_) in self.Relationships])
 

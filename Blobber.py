@@ -7,7 +7,7 @@ import pickle as Pickle
 import sqlite3
 from datetime import date,datetime
 from Profile import Profile
-from Crawler import Progress,FauxParser,StringMap
+from Progress import Progress,FauxParser,StringMap
 
 def debug(mesg):
     sys.stderr.write("%s\n" % mesg.encode("utf-8"))
@@ -289,10 +289,6 @@ class ProfileDb(object):
             for (text,values) in getattr(profile,field).iteritems():
                 thisId  =   self.__getEnum(text,field)
                 for value in values:
-                    #fetish    =   stringMap.getString("Fetish",value)
-                    #cursor.execute("SELECT COUNT(*) FROM Fetishes WHERE Name=?",[fetish])
-                    #if cursor.fetchall()[0][0] == 0:
-                    #    cursor.execute("INSERT INTO Fetishes VALUES(?,?)", (value,fetish))
                     cursor.execute("INSERT INTO ProfileToFetish VALUES(?,?,?)" ,(profile.Id,value,thisId))
         self.__db.commit()
 
@@ -300,9 +296,7 @@ def LoadSavedBlob(file_name):
     return ProfileDb(file_name)
 
 def CreateLiveBlob(file_name):
-<<<<<<< HEAD
     with ProfileDb(file_name) as profileDb:
-        #profileDb   =   ProfileDb(file_name)
         profileDb.Clear()
 
         stringMap   =   StringMap()
@@ -324,36 +318,11 @@ def CreateLiveBlob(file_name):
             else:
                 progress.errorProfile(uid)
                 failed  += 1
-                sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (uid,failed,total,100*(laoded+failed)/total))
+                sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (uid,failed,total,100*(loaded+failed)/total))
             del profile
         sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (loaded,failed))
         return profileDb
-=======
-    profileDb   =   ProfileDb(file_name)
-    profileDb.Clear()
-    progress    =   Progress()
-    for section in Progress.SECTIONS:
-        profileDb.FillSection(section,progress.getIds(section))
-    uids        =   set(progress.getIds("CompletedProfiles"))
-    sys.stderr.write("Profiles to load: [%s]\n" % len(uids))
-    loaded      =   0
-    failed      =   0
-    total       =   len(uids)
-    for uid in uids:
-        profile =   Profile(uid)
-        if(profile.load()):
-            profileDb.AddProfile(profile)
-            loaded   += 1
-            sys.stderr.write("Progress - Loaded Profile [%12s], [%12s] of [%12s], [%3s%% Done]\n" % (uid,loaded,total,100*(loaded+failed)/total))
-        else:
-            progress.errorProfile(uid)
-            failed  += 1
-            sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (uid,failed,total,100*(loaded+failed)/total))
-        del profile
-    sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (loaded,failed))
-    return profileDb
->>>>>>> a71b01596d2779451801592efcca21a72173271d
- 
+
 def CreateMemoryOnlyBlob():
     return CreateLiveBlob(":memory:")
 
