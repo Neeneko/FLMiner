@@ -8,7 +8,7 @@ import cPickle as Pickle
 import optparse
 from datetime import date,timedelta,datetime
 #from Crawler import Crawler,Session
-from Crawler import Progress,FauxParser
+from Progress import Progress,FauxParser
 from Profile import Profile
 from Blobber import CreateMemoryOnlyBlob,LoadSavedBlob
 from Report import ReportManager,ReportData,MultiGraph,SimpleGraph,PercentHeatMap
@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     genderGraph             =   SimpleGraph("Gender",rows=profileDb.GetProfiles("Gender"),default_colour="Green",sort_by_value=True)
     genderGraphs            =   {}
-    genderGraphs["Age"]     =   MultiGraph("Age By Gender",rows=profileDb.GetProfiles("GenderGroup","Age"))
+    genderGraphs["Age"]     =   MultiGraph("Age By Gender",rows=profileDb.GetProfiles("GenderGroup","Age"),legend="Gender")
     genderGraphs["Ori"]     =   MultiGraph("Orientation By Gender",vertical=False,rows=profileDb.GetProfiles("GenderGroup","Orientation"),sort_by_value=True)
     genderGraphs["Ident"]   =   MultiGraph("Role By Gender",vertical=False,rows=profileDb.GetProfiles("GenderGroup","Type"),sort_by_value=True)
     genderGraphs["Active"]  =   MultiGraph("Actvity Type By Gender",vertical=False,rows=profileDb.GetProfiles("GenderGroup","Active"),sort_by_value=True)  
@@ -98,7 +98,7 @@ if __name__ == "__main__":
             row = cursor.fetchone()
             if row is None:
                 break
-            sys.stderr.write("[%32s:%8s] => [%8s]\n" % row)
+            #sys.stderr.write("[%32s:%8s] => [%8s]\n" % row)
             reportData.Graphs[-1].setValue(row[0],row[2])
             fetishIds[row[1]]   =   row[0]
 

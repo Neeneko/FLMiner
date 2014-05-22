@@ -9,8 +9,9 @@ def log(message):
 
 class MultiGraph(object):
 
-    def __init__(self,title,rows=[],vertical=True,preserve_order=False,sort_by_value=False):
+    def __init__(self,title,rows=[],vertical=True,preserve_order=False,sort_by_value=False,legend=""):
         self.__title        =   title
+        self.__legend       =   legend
         self.__data         =   {}
         self.__keys         =   []
         self.__vertical     =   vertical
@@ -29,6 +30,9 @@ class MultiGraph(object):
 
     def getVertical(self):
         return self.__vertical
+
+    def getLegend(self):
+        return self.__legend
 
     def getTitle(self):
         return self.__title
@@ -62,6 +66,14 @@ class MultiGraph(object):
         sys.stderr.write("Cats [%s] Order [%s]\n" % (self.__data.keys(),self.__order)) 
         if self.__order is not None:  
             return sorted(self.__order)
+        elif self.__sortByValue:
+            tmp =   {}
+            for cat in self.__data.keys():
+                tmp[cat] = 0
+            for k,v in self.__data.iteritems():
+                for vv in v.values():
+                    tmp[k] += vv
+            return sorted(tmp,key=tmp.get)
         else:
             return self.__data.keys()
 
@@ -340,7 +352,7 @@ class ReportManager(object):
                     cat     =   cats[idx]
                     colour  =   self.__getColour(cat)
                     values  =   [ graph.getValue(cat,key) for key in keys ]
-                    rect    =   ax.bar(ind+idx,values,color=colour,edgecolor = "none")
+                    rect    =   ax.bar(ind+idx,values,color=colour,edgecolor = "none",label=cat)
                 ax.set_title(graph.getTitle())
                 ax.set_xticks(ind)
                 ax.set_xticklabels( keys )
@@ -349,6 +361,7 @@ class ReportManager(object):
                 ax.xaxis.set_major_formatter(ticker.NullFormatter())
                 ax.xaxis.set_minor_locator(ticker.FixedLocator(len(cats)/2.0 + ind))
                 ax.xaxis.set_minor_formatter(ticker.FixedFormatter(keys))
+                ax.legend(title=graph.getLegend(),loc="upper right")
             elif isinstance(graph,MultiGraph) and not graph.getVertical():
                 keys        =   graph.getKeys()
                 cats        =   graph.getCats()
@@ -358,7 +371,7 @@ class ReportManager(object):
                     cat     =   cats[idx]
                     colour  =   self.__getColour(cat)
                     values  =   [ graph.getValue(cat,key) for key in keys ]
-                    rect    =   ax.barh(ind+idx, values, color=colour,edgecolor = "none")
+                    rect    =   ax.barh(ind+idx, values, color=colour,edgecolor = "none",label=cat)
                 ax.set_title(graph.getTitle())
                 ax.set_yticks(ind)
                 ax.set_yticklabels( keys )
@@ -367,6 +380,7 @@ class ReportManager(object):
                 ax.yaxis.set_major_formatter(ticker.NullFormatter())
                 ax.yaxis.set_minor_locator(ticker.FixedLocator(len(cats)/2.0 + ind))
                 ax.yaxis.set_minor_formatter(ticker.FixedFormatter(keys))
+                ax.legend(title=graph.getLegend(),loc="lower right")
  
             pdf.savefig(fig)
             pyplot.close()
