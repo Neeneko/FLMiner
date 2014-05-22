@@ -70,7 +70,7 @@ class CrawlerGroup(Group):
                 urls =   tree.xpath('//div[contains(@class,"user_in_list")]/div/a/@href')
                 for url in urls:
                     pid =  int(re.sub(r'[^0-9 ]','', url))
-                    self.Profiles.add(pid)
+                    self.Members.add(pid)
 
                 next    =   tree.xpath('//a[@class="next_page"]')
                 if len(next) == 1:

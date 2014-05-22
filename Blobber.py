@@ -6,7 +6,7 @@ import pickle as Pickle
 #import cPickle as Pickle
 import sqlite3
 from datetime import date,datetime
-from Profile import Profile
+from Profile import Profile,Group
 from Progress import Progress,FauxParser,StringMap
 
 def debug(mesg):
@@ -66,10 +66,11 @@ class ProfileDb(object):
 
     def Clear(self):
         cursor = self.__db.cursor()
+        #-------------------------------------------------------------------------------------
         for section in Progress.SECTIONS:
             cursor.execute("DROP TABLE IF EXISTS %s" % section)
             cursor.execute("CREATE TABLE %s(Id INT)" % section)
-
+        #-------------------------------------------------------------------------------------
         cursor.execute("DROP TABLE IF EXISTS Profiles")
         createString    =   "CREATE TABLE Profiles ("
         createString += "Id INTEGER PRIMARY KEY,"
@@ -111,7 +112,28 @@ class ProfileDb(object):
 
         cursor.execute("DROP TABLE IF EXISTS IdentGroups")
         cursor.execute("CREATE TABLE IdentGroups(Ident TEXT, IdentGroup TEXT)")
+        #-------------------------------------------------------------------------------------
+        cursor.execute("DROP TABLE IF EXISTS Groups")
+        createString    =   "CREATE TABLE Groups ("
+        createString += "Id INTEGER PRIMARY KEY,"
+        for field in Group.INT_FIELDS:
+            if field == "Id":
+                continue
+            createString += "%s INT," % field
 
+        for field in Group.TEXT_FIELDS:
+            createString += "%s TEXT," % field
+
+        for field in Group.DATE_FIELDS:
+            createString += "%s DATE," % field
+        createString = createString[:-1]
+        createString += ")"
+        cursor.execute(createString)
+
+        for field in Group.LIST_ID_FIELDS:
+            cursor.execute("DROP TABLE IF EXISTS %s" % field)
+            cursor.execute("CREATE TABLE %s(Id INT, DstId INT)" % (field))
+        #-------------------------------------------------------------------------------------
         self.__db.commit()
 
     def InitIdentGroups(self,ident_map):
@@ -290,6 +312,44 @@ class ProfileDb(object):
                 thisId  =   self.__getEnum(text,field)
                 for value in values:
                     cursor.execute("INSERT INTO ProfileToFetish VALUES(?,?,?)" ,(profile.Id,value,thisId))
+
+        self.__db.commit()
+
+    def AddGroup(self,group):
+        cursor = self.__db.cursor()
+
+        insertString    =   "INSERT INTO Groups VALUES("
+        args            =   []
+        insertString += "?,"
+        args.append(group.Id)
+
+        for field in Group.INT_FIELDS:
+            if field == "Id":
+                continue
+            insertString += "?,"
+            args.append(getattr(group,field))
+
+        for field in Group.TEXT_FIELDS:
+            insertString += "?,"
+            args.append(getattr(group,field))
+
+        for field in Group.DATE_FIELDS:
+            insertString += "?,"
+            dateString  =   getattr(group,field)
+            if dateString == Group.NEVER_ACTIVE:
+                args.append(0)
+            else:
+                splitList = re.split('/',getattr(group,field))
+                args.append(date(int(splitList[2]),int(splitList[1]),int(splitList[0])).toordinal())
+        insertString = insertString[:-1]
+        insertString += ")"
+ 
+        cursor.execute(insertString,tuple(args))
+
+        for field in Group.LIST_ID_FIELDS:
+            for value in getattr(group,field):
+                cursor.execute("INSERT INTO %s VALUES(?,?)" % field,(group.Id,value))
+
         self.__db.commit()
 
 def LoadSavedBlob(file_name):
@@ -304,23 +364,41 @@ def CreateLiveBlob(file_name):
         for section in Progress.SECTIONS:
             profileDb.FillSection(section,progress.getIds(section))
         profileDb.FillStrings("Fetishes",stringMap.getSection("Fetish"))
-        uids        =   set(progress.getIds("CompletedProfiles"))
-        sys.stderr.write("Profiles to load: [%s]\n" % len(uids))
-        loaded      =   0
-        failed      =   0
-        total       =   len(uids)
-        for uid in uids:
-            profile =   Profile(uid)
+        pids        =   set(progress.getIds("CompletedProfiles"))
+        sys.stderr.write("Profiles to load: [%s]\n" % len(pids))
+        ploaded      =   0
+        pfailed      =   0
+        ptotal       =   len(pids)
+        for pid in pids:
+            profile =   Profile(pid)
             if(profile.load()):
                 profileDb.AddProfile(profile)
-                loaded   += 1
-                sys.stderr.write("Progress - Loaded Profile [%12s], [%12s] of [%12s], [%3s%% Done]\n" % (uid,loaded,total,100*(loaded+failed)/total))
+                ploaded   += 1
+                sys.stderr.write("Progress - Loaded Profile [%12s], [%12s] of [%12s], [%3s%% Done]\n" % (pid,ploaded,ptotal,100*(ploaded+pfailed)/ptotal))
             else:
-                progress.errorProfile(uid)
-                failed  += 1
-                sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (uid,failed,total,100*(loaded+failed)/total))
+                progress.errorProfile(pid)
+                pfailed  += 1
+                sys.stderr.write("Progress - Failed Profile [%12s], [%12s] of [%12s], [%s%% Done]\n" % (pid,pfailed,ptotal,100*(ploaded+pfailed)/ptotal))
             del profile
-        sys.stderr.write("Loaded [%d] Profiles. [%d] Errors.\n" % (loaded,failed))
+        gids        =   set(progress.getIds("CompletedGroups"))
+        sys.stderr.write("Groups to load: [%s]\n" % len(gids))
+        gloaded      =   0
+        gfailed      =   0
+        gtotal       =   len(gids)
+        for gid in gids:
+            group =   Group(gid)
+            if(group.load()):
+                profileDb.AddGroup(group)
+                gloaded   += 1
+                sys.stderr.write("Progress - Loaded Group [%12s], [%12s] of [%12s], [%3s%% Done]\n" % (gid,gloaded,gtotal,100*(gloaded+gfailed)/gtotal))
+            else:
+                progress.errorGroup(gid)
+                failed  += 1
+                sys.stderr.write("Progress - Failed Group [%12s], [%12s] of [%12s], [%s%% Done]\n" % (gid,gfailed,gtotal,100*(gloaded+gfailed)/gtotal))
+            del group
+ 
+
+        sys.stderr.write("Loaded [%d] Profiles [%d] Groups [%d] Errors.\n" % (ploaded,gloaded,pfailed+gfailed))
         return profileDb
 
 def CreateMemoryOnlyBlob():

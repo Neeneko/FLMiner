@@ -8,15 +8,21 @@ import ConfigParser
 
 class Group(object):
 
-    NO_OWNER                =   "-1"
+    NO_OWNER                =   "0"
     NEVER_ACTIVE            =   "Never"
     MISSING_CRAWL_DATE      =   "Never"
+
+    INT_FIELDS              =   ["Id","Membership","Owner"]
+    TEXT_FIELDS             =   ["Name"]
+    DATE_FIELDS             =   ["LastActivity","CrawlDate"]
+    LIST_ID_FIELDS          =   ["Mods","Members"]
+ 
 
     def __init__(self,gid):
         self.Id             =   int(gid)
         self.Name           =   None
         self.Membership     =   0
-        self.Profiles       =   set()
+        self.Members        =   set()
         self.Owner          =   Group.NO_OWNER
         self.Mods           =   set()
         self.TooBig         =   False
@@ -24,7 +30,7 @@ class Group(object):
         self.LastActivity   =   Group.NEVER_ACTIVE
 
     def getProfiles(self):
-        return self.Profiles
+        return self.Members | set.Mods | set([self.Owner])
 
     def getLastActivity(self):
         if self.LastActivity == Group.NEVER_ACTIVE:
@@ -109,6 +115,8 @@ class Profile(object):
     DEFAULT_ANSWER          =   "No Answer"
     NEVER_ACTIVE            =   "Never"
     MISSING_CRAWL_DATE      =   "Never"
+    GRAPH_NOT_SET           =   "-1"
+    GRAPH_ISOLATED          =   "0"
     #-----------------------------------------------
     GENDER_GROUP_MALE       =   ["M","FtM"]
     GENDER_GROUP_FEMALE     =   ["F","FEM","MtF"]
@@ -127,7 +135,7 @@ class Profile(object):
                                     "SM":       ["Sadist","Masochist","Sadomasochist"] 
                                 }
 
-    INT_FIELDS              =   ["Id","Age"]
+    INT_FIELDS              =   ["Id","Age","Graph"]
     TEXT_FIELDS             =   ["Name","Gender","Type","Orientation","Active"]
     DATE_FIELDS             =   ["LastActivity","CrawlDate"]
     LIST_ID_FIELDS          =   ["Friends"]
@@ -153,6 +161,7 @@ class Profile(object):
         self.Into           =   {}
         self.Curious        =   {}
         self.Groups         =   set()
+        self.Graph          =   Profile.GRAPH_NOT_SET
 
     def getGroups(self):
         return self.Groups
