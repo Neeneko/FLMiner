@@ -138,6 +138,11 @@ class Progress(object):
             oldId = self.__progress.pop("ErrorProfiles")
             self.__progress.set("PendingProfiles",oldId)
 
+    def resetErrorGroups(self):
+        while self.__progress.len("ErrorGroups") != 0:
+            oldId = self.__progress.pop("ErrorGroups")
+            self.__progress.set("PendingGroups",oldId)
+
     def validate(self):
         for sectionName in self.__progress.sections():
             for value in self.__progress.options(sectionName):

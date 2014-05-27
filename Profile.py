@@ -30,7 +30,7 @@ class Group(object):
         self.LastActivity   =   Group.NEVER_ACTIVE
 
     def getProfiles(self):
-        return self.Members | set.Mods | set([self.Owner])
+        return self.Members | self.Mods | set([self.Owner])
 
     def getLastActivity(self):
         if self.LastActivity == Group.NEVER_ACTIVE:

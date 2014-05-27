@@ -42,16 +42,20 @@ class CrawlerGroup(Group):
             return False
 
         tree            =   html.fromstring(self._page.text)
-        self.Name       =   str(tree.xpath('//h2[@class="group_name bottom"]/a/text()')[0])
+        self.Name       =   str(tree.xpath('//h2[@class="group_name bottom"]/a/text()')[0].encode('utf8'))
         text            =   tree.xpath('//h2[@class="group_name bottom"]/following-sibling::p/text()')[0]
         self.Membership =   int(re.sub(r'[^0-9]','', text))
-        text            =    tree.xpath('//span[@class="last_comment"]/span/text()')[0]
-        self.setLastActive(text)
+        text            =   tree.xpath('//span[@class="last_comment"]/span/text()')
+        if len(text) > 0:
+            self.setLastActive(text[0])
 
         for text in tree.xpath('//ul[@class="group_mods"]/li/a[@class="small"]/@href'):
             self.Mods.add(int(re.sub(r'[^0-9]','', text)))
 
-        self.Owner      =   int(re.sub(r'[^0-9]','',tree.xpath('//div[contains(text(),"(owner)")]/preceding::a/@href')[-1]))
+        try:
+            self.Owner      =   int(re.sub(r'[^0-9]','',tree.xpath('//div[contains(text(),"(owner)")]/preceding::a/@href')[-1]))
+        except:
+            pass
         #-----------------------------------------------------------------------------------------------
         self._link      =   "https://fetlife.com/groups/%s/group_memberships" % self.Id
         self._page      =   session.get(self._link)
@@ -143,7 +147,10 @@ class CrawlerProfile(Profile):
         splitList       =   re.split(" ",rawPair)
         if len(splitList) > 1:
             self.Type    =   splitList[1]
-        self.Age         =   int(re.sub(r'[^0-9]','', splitList[0]))
+        try:
+            self.Age         =   int(re.sub(r'[^0-9]','', splitList[0]))
+        except ValueError:
+            self.Age        =   -1
         if self.Age != splitList[0]:
             self.Gender     =   re.sub(r'[0-9 ]','', splitList[0])
         Location            =   tree.xpath('//div[@class="span-13 append-1"]/p/em/a/text()')
@@ -203,14 +210,17 @@ class CrawlerProfile(Profile):
                 if item.text is None:
                     continue
                 #sys.stderr.write("\t[%s][%s]\n" % (item,item.text))
-                if "href" in item.keys():
-                    fetishName          =   item.text
-                    fetishId            =   int(re.sub(r'[^0-9 ]','', item.get("href")))
-                    intoList.append( [fetishId,None] )
-                    if not stringMap.hasString("Fetish",fetishId):
-                        stringMap.addString("Fetish",fetishId,fetishName)
-                elif len(intoList) > 0:
-                    intoList[-1][1]  =   item.text[1:-1]
+                try:
+                    if "href" in item.keys():
+                        fetishName          =   item.text
+                        fetishId            =   int(re.sub(r'[^0-9 ]','', item.get("href")))
+                        intoList.append( [fetishId,None] )
+                        if not stringMap.hasString("Fetish",fetishId):
+                            stringMap.addString("Fetish",fetishId,fetishName)
+                    elif len(intoList) > 0:
+                        intoList[-1][1]  =   item.text[1:-1]
+                except ValueError:
+                    pass
 
             #sys.stderr.write("\n%s\n" % intoList)
             for (k,v) in intoList:
@@ -226,15 +236,17 @@ class CrawlerProfile(Profile):
                 if item.text is None:
                     continue
                 #sys.stderr.write("\t[%s][%s] - [%s]\n" % (item,item.text,item.keys()))
-                if "href" in item.keys():
-                    fetishName          =   item.text
-                    fetishId            =   int(re.sub(r'[^0-9 ]','', item.get("href")))
-                    curiousList.append( [fetishId,None] )
-                    if not stringMap.hasString("Fetish",fetishId):
-                        stringMap.addString("Fetish",fetishId,fetishName)
-                elif len(curiousList) > 0:
-                    curiousList[-1][1]  =   item.text[1:-1]
-
+                try:
+                    if "href" in item.keys():
+                        fetishName          =   item.text
+                        fetishId            =   int(re.sub(r'[^0-9 ]','', item.get("href")))
+                        curiousList.append( [fetishId,None] )
+                        if not stringMap.hasString("Fetish",fetishId):
+                            stringMap.addString("Fetish",fetishId,fetishName)
+                    elif len(curiousList) > 0:
+                        curiousList[-1][1]  =   item.text[1:-1]
+                except ValueError:
+                    pass
             #sys.stderr.write("\n%s\n" % curiousList)
             for (k,v) in curiousList:
                 if v not in self.Curious:
@@ -447,6 +459,10 @@ if __name__ == "__main__":
 
     options, args = parser.parse_args()
 
+    session =   Session()
+    if not session.doLogin():
+        sys.stderr.write("Something went wrong, still not connected\n")
+
     if options.init:
         sys.stderr.write("Init Progress File\n")
         if options.profile == None and options.group == None:
@@ -455,17 +471,18 @@ if __name__ == "__main__":
         progress = Progress()
         progress.initPending(options.profile,options.group)
         progress.printProgress()
+        crawler     =   Crawler(session,progress)
+        sys.stderr.write("Starting Crawler\n")
+        crawler.doTick()
+        sys.stderr.write("Ending Crawler\n")
+        progress.setExit()
+        progress.saveProgress()
         sys.exit(0)
     elif options.rebuild:
         sys.stderr.write("Rebuilding Progress File\n")
         Progress(True)
         progress.printProgress()
         sys.exit(0)
-
-    #everything after this requires a session
-    session =   Session()
-    if not session.doLogin():
-        sys.stderr.write("Something went wrong, still not connected\n")
 
     if options.profile is not None:
         profile = CrawlerProfile(options.profile)
@@ -494,6 +511,7 @@ if __name__ == "__main__":
         progress    =   Progress()
         progress.printProgress()
         progress.resetErrorProfiles()
+        progress.resetErrorGroups()
         progress.saveProgress()
         progress.printProgress()
         crawler     =   Crawler(session,progress,True)
