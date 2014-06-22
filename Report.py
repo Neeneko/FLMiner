@@ -1,7 +1,11 @@
 import os
 import sys
 from Profile import Profile
-
+import numpy
+import pylab
+from matplotlib import pyplot,colors,ticker
+from matplotlib.backends.backend_pdf import PdfPages
+ 
 
 def log(message):
     sys.stderr.write("%s\n" % message)
@@ -37,7 +41,18 @@ class MultiGraph(object):
     def getTitle(self):
         return self.__title
 
+    def __safeKey(self,key):
+        return key
+        if isinstance(key,int):
+            return "%d" % key
+        elif key is None:
+            return "None"
+        else:
+            #log("key [%s] type [%s]" % (key,type(key)))
+            return key.decode('ascii','replace')
+
     def incValue(self,cat,key,value):
+        key = self.__safeKey(key)
         if cat not in self.__data:
             self.__data[cat]      =   {}
             if self.__order is not None:
@@ -49,6 +64,7 @@ class MultiGraph(object):
         self.__data[cat][key]     +=  value
 
     def setValue(self,cat,key,value):
+        key = self.__safeKey(key)
         if cat not in self.__data:
             self.__data[cat]      =   {}
             if self.__order is not None:
@@ -60,6 +76,7 @@ class MultiGraph(object):
         self.__data[cat][key] =  value
 
     def getValue(self,cat,key):
+        key = self.__safeKey(key)
         return self.__data.get(cat,{}).get(key,0)
 
     def getCats(self):
@@ -211,51 +228,16 @@ class ReportManager(object):
 
 
     def writeReport(self,data):
-        log("Initing matplotlib")
-        import numpy
-        import pylab
-        from matplotlib import pyplot,colors,ticker
-        from matplotlib.backends.backend_pdf import PdfPages
-        log("Done Init")
-
-
         log("Starting Doc Creation")
-        #data = numpy.random.randn(7, 1024)
         fileName    =   os.path.join(self.__reportPath,"fetlife_report.pdf")
         pdf = PdfPages(fileName)
-        """
-        # Generate the pages
-        nb_plots = data.shape[0]
-        nb_plots_per_page = 5
-        nb_pages = int(numpy.ceil(nb_plots / float(nb_plots_per_page)))
-        grid_size = (nb_plots_per_page, 1)
- 
-        for i, samples in enumerate(data):
-          # Create a figure instance (ie. a new page) if needed
-          if i % nb_plots_per_page == 0:
-              fig = plot.figure(figsize=(8.27, 11.69), dpi=100)
- 
-          # Plot stuffs !
-          plot.subplot2grid(grid_size, (i % nb_plots_per_page, 0))
-          plot.hist(samples, 32, normed=1, facecolor='#808080', alpha=0.75)
- 
-          # Close the page if needed
-          if (i + 1) % nb_plots_per_page == 0 or (i + 1) == nb_plots:
-            plot.tight_layout()
-            pdf.savefig(fig)
- 
-        # Write the PDF document to the disk
-        pdf.close()
-
-        """
-        
-        pdf = PdfPages(fileName)
- 
         pyplot.rc('xtick', labelsize=3) 
         pyplot.rc('ytick', labelsize=5)
         for graph in data.Graphs:
             if isinstance(graph,SimpleGraph):
+                #keys        =   [x.encode('utf8',"ignore") for x in graph.getKeys()]
                 keys        =   graph.getKeys()
+                uniKeys     =   self.unicodeKeys(keys)
                 ind         =   numpy.arange(len(keys))
                 fig, ax     =   pyplot.subplots()
                 values  =   [ graph.getValue(key) for key in keys ]
@@ -268,12 +250,12 @@ class ReportManager(object):
                 rect    =   ax.barh(ind, values, color=colours,edgecolor = edgeColours)
                 ax.set_title(graph.getTitle())
                 ax.set_yticks(ind)
-                ax.set_yticklabels( keys )
+                ax.set_yticklabels(uniKeys)
                 ax.set_ylim(0,len(keys))
                 ax.tick_params('both', length=0, width=0, which='minor')
                 ax.yaxis.set_major_formatter(ticker.NullFormatter())
                 ax.yaxis.set_minor_locator(ticker.FixedLocator(0.5 + ind))
-                ax.yaxis.set_minor_formatter(ticker.FixedFormatter(keys))
+                ax.yaxis.set_minor_formatter(ticker.FixedFormatter(uniKeys))
             elif isinstance(graph,PercentHeatMap):
                 pyplot.rc('xtick', labelsize=6) 
                 pyplot.rc('xtick', labelsize=6) 
@@ -344,7 +326,9 @@ class ReportManager(object):
                 sys.stderr.write("boundries - %s\n" % str(colorBar._boundaries))
                 pyplot.title(graph.getTitle())
             elif isinstance(graph,MultiGraph) and graph.getVertical():
+                #keys        =   [("%s" % (x)).encode('utf8','ignore') for x in graph.getKeys()]
                 keys        =   graph.getKeys()
+                uniKeys     =   self.unicodeKeys(keys)
                 cats        =   graph.getCats()
                 ind         =   numpy.arange(len(keys))*len(cats)
                 fig, ax     =   pyplot.subplots()
@@ -355,15 +339,18 @@ class ReportManager(object):
                     rect    =   ax.bar(ind+idx,values,color=colour,edgecolor = "none",label=cat)
                 ax.set_title(graph.getTitle())
                 ax.set_xticks(ind)
-                ax.set_xticklabels( keys )
+                ax.set_xticklabels(uniKeys)
                 ax.set_xlim(0,len(keys)*len(cats))
                 ax.tick_params('both', length=0, width=0, which='minor')
                 ax.xaxis.set_major_formatter(ticker.NullFormatter())
                 ax.xaxis.set_minor_locator(ticker.FixedLocator(len(cats)/2.0 + ind))
-                ax.xaxis.set_minor_formatter(ticker.FixedFormatter(keys))
+                ax.xaxis.set_minor_formatter(ticker.FixedFormatter(uniKeys))
                 ax.legend(title=graph.getLegend(),loc="upper right")
             elif isinstance(graph,MultiGraph) and not graph.getVertical():
+                #keys        =   [("%s" % (x)).encode('utf8','ignore') for x in graph.getKeys()]
                 keys        =   graph.getKeys()
+                #uniKeys     =   [unicode(x.decode("utf-8")) for x in keys]
+                uniKeys     =   self.unicodeKeys(keys)
                 cats        =   graph.getCats()
                 ind         =   numpy.arange(len(keys))*(len(cats))
                 fig, ax     =   pyplot.subplots()
@@ -374,12 +361,12 @@ class ReportManager(object):
                     rect    =   ax.barh(ind+idx, values, color=colour,edgecolor = "none",label=cat)
                 ax.set_title(graph.getTitle())
                 ax.set_yticks(ind)
-                ax.set_yticklabels( keys )
+                ax.set_yticklabels( uniKeys )
                 ax.set_ylim(0,len(keys)*len(cats))
                 ax.tick_params('both', length=0, width=0, which='minor')
                 ax.yaxis.set_major_formatter(ticker.NullFormatter())
                 ax.yaxis.set_minor_locator(ticker.FixedLocator(len(cats)/2.0 + ind))
-                ax.yaxis.set_minor_formatter(ticker.FixedFormatter(keys))
+                ax.yaxis.set_minor_formatter(ticker.FixedFormatter(uniKeys))
                 ax.legend(title=graph.getLegend(),loc="lower right")
  
             pdf.savefig(fig)
@@ -388,13 +375,21 @@ class ReportManager(object):
         
         log("Done Doc Creation")
 
+    def unicodeKeys(self,keys):
+        rv  =   []
+        for key in keys:
+            if key is None:
+                rv.append(unicode("None"))
+            elif isinstance(key,int):
+                rv.append(unicode("%s" % key))
+            else:
+                rv.append(unicode(key.decode("utf-8")))
+        return rv
+
     def displayReport(self):
+        """
         import webbrowser
         fileName    =   os.path.join(self.__reportPath,"fetlife_report.pdf")
         controller = webbrowser.get()
         controller.open_new("file:" + os.path.abspath(fileName))
-
-
-        pass
-
-
+        """

@@ -221,13 +221,22 @@ class Progress(object):
     def getExit(self):
         return self.__exit
     #------------------------------------------------------------------------------------------
-    def __knownProfile(self,pid):
+    def knownProfile(self,pid):
         return (            self.__progress.has_option("PendingProfiles",pid)      \
                     or      self.__progress.has_option("CompletedProfiles",pid)    \
                     or      self.__progress.has_option("ErrorProfiles",pid)        \
                     or      self.__progress.has_option("MissingProfiles",pid)      \
                     or      self.__progress.has_option("ActiveProfiles",pid)        )
- 
+
+    def maxProfile(self):
+        self.fix()
+        rv  =   0
+        for section in ["PendingProfiles","CompletedProfiles","ErrorProfiles","MissingProfiles","ActiveProfiles"]:
+            if len(self.__progress.options(section)) == 0:
+                continue
+            rv    =   max(set([rv]) | self.__progress.options(section))
+        return rv
+
     def nextProfile(self):
         with self.__mutex:
             if self.__progress.len("PendingProfiles") == 0:
@@ -236,6 +245,10 @@ class Progress(object):
             rv = self.__progress.pop("PendingProfiles")
             self.__progress.set("ActiveProfiles",rv)
             return rv 
+
+    def pendingProfile(self,pid):
+        with self.__mutex:
+            self.__progress.set("PendingProfiles",pid)
 
     def errorProfile(self,pid):
         with self.__mutex:
@@ -253,10 +266,10 @@ class Progress(object):
         sys.stderr.write("Completing [%s]\n" % pid)
         with self.__mutex:
             for opid in op:
-                if not self.__knownProfile(opid):
+                if not self.knownProfile(opid):
                     self.__progress.set("PendingProfiles",opid)
             for ogid in og:
-                if not self.__knownProfile(ogid):
+                if not self.knownProfile(ogid):
                     self.__progress.set("PendingGroups",ogid)
 
             if self.__progress.has_option("ActiveProfiles",pid):
@@ -297,7 +310,7 @@ class Progress(object):
         sys.stderr.write("Completing [%s]\n" % gid)
         with self.__mutex:
             for opid in op:
-                if not self.__knownProfile(opid):
+                if not self.knownProfile(opid):
                     self.__progress.set("PendingProfiles",opid)
 
             if self.__progress.has_option("ActiveGroups",gid):

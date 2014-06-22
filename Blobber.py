@@ -16,7 +16,10 @@ def debug(mesg):
 class ProfileDb(object):
 
     def __init__(self,file_name):
-        self.__db           =   sqlite3.connect(file_name,detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        self.__db               =   sqlite3.connect(file_name,detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)
+        self.__db.text_factory  =   str
+        cursor                  =   self.__db.cursor()
+        #cursor.execute("PRAGMA temp_store=2")
         self.__loadEnums()
 
     def __enter__(self):

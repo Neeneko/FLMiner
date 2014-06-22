@@ -57,7 +57,6 @@ if __name__ == "__main__":
     reportData.Graphs.append(genderGraph)
     for v in genderGraphs.values():
         reportData.Graphs.append(v)
-
     sys.stderr.write("Building HeatMaps\n")
     for heatMapOrigin in profileDb.GetDegreeOrigins():
         profileName = profileDb.GetProfileName(heatMapOrigin)
@@ -71,7 +70,6 @@ if __name__ == "__main__":
     sys.stderr.write("Done Heatmaps\n")
     sys.stderr.write("Examining Fetishes\n")
     cursor      =   profileDb.GetCursor()
-    #select fetishid,count(fetishid) from profiletofetish group by fetishid order by count(fetishid) DESC limit 32;
     cursor.execute("SELECT Fetishes.Name,FetishId,COUNT(FetishId) FROM ProfileToFetish,Fetishes WHERE ProfileToFetish.FetishId == Fetishes.Id GROUP BY FetishId ORDER BY COUNT(FetishId) DESC LIMIT 32")
     reportData.Graphs.append(SimpleGraph("Top Fetishes",preserve_order=True,highlight="Yellow"))
     fetishIds   =   {}
@@ -89,9 +87,8 @@ if __name__ == "__main__":
             cursor.execute("SELECT COUNT(ProfileToFetish.FetishId) FROM Profiles,ProfileToFetish WHERE Profiles.Id == ProfileToFetish.ProfileId AND Profiles.GenderGroup=? AND ProfileToFetish.FetishId=?",(genderGroup,fetishId))
             reportData.Graphs[-1].setValue(genderGroup,fetishName,cursor.fetchone()[0])
  
-
-
     for key in Profile.IDENTITY_GROUPS.keys():
+        sys.stderr.write("Identity Group [%8s]\n" % key)
         cursor.execute("SELECT Fetishes.Name,FetishId,COUNT(FetishId) FROM ProfileToFetish,Fetishes,Profiles,IdentGroups WHERE ProfileToFetish.FetishId == Fetishes.Id AND ProfileToFetish.ProfileId == Profiles.Id AND Profiles.Type == IdentGroups.IdentGroup AND IdentGroups.Ident==? GROUP BY FetishId ORDER BY COUNT(FetishId) DESC LIMIT 32",[key])
         reportData.Graphs.append(SimpleGraph("Top Fetishes for %s" % key,preserve_order=True,highlight=fetishIds.values()))
         while True:
@@ -102,47 +99,7 @@ if __name__ == "__main__":
             reportData.Graphs[-1].setValue(row[0],row[2])
             fetishIds[row[1]]   =   row[0]
 
-
-
-
     sys.stderr.write("Done Fetishes\n")
-    """
-    sys.stderr.write("Examining Fetishes\n")
-    #TODO - we might hit the megadict problem here.
-    fetishes    =   {}
-    fetishes["Totals"]  =   {}
-    cursor      =   profileDb.GetCursor()
-    count       =   0
-    cursor.execute("SELECT * FROM ProfileToFetish")
-    while True:
-        row = cursor.fetchone()
-        if row is None:
-            sys.stderr.write("\t[%s] Total\n" % count)
-            break
-        count += 1
-        profileId   =   row[0]
-        fetishId    =   row[1]
-        relationId  =   row[2]
-        if fetishId not in fetishes["Totals"]:
-            fetishes["Totals"][fetishId]    =   0
-        fetishes["Totals"][fetishId]        +=  1
-
-    sortedTotals = sorted(fetishes["Totals"],key=fetishes["Totals"].get,reverse=True)[:32]
-
-    #fetishGraph =   SimpleGraph("Top Fetishes",preserve_order=True)
-    fetishGraph =   MultiGraph("Top Fetishes By Gender",vertical=False,preserve_order=True)
-    for fetishId in sortedTotals:
-        cursor.execute("SELECT Name FROM Fetishes WHERE Id=?",[fetishId])
-        row = cursor.fetchone()
-        fetishName  =   row[0]
-        for genderGroup in ["Male","Female","Other"]:
-            cursor.execute("SELECT COUNT(ProfileToFetish.FetishId) FROM Profiles,ProfileToFetish WHERE Profiles.Id == ProfileToFetish.ProfileId AND Profiles.GenderGroup=? AND ProfileToFetish.FetishId=?",(genderGroup,fetishId))
-            fetishGraph.setValue(genderGroup,fetishName,cursor.fetchone()[0])
-        sys.stderr.write("[%s]:[%s]\n" % (fetishId,fetishName))
-        #fetishGraph.setValue(row[1],fetishes["Totals"][row[0]])
-    reportData.Graphs.append(fetishGraph)
-    sys.stderr.write("Done Fetishes\n")
-    """
     reportManager   =   ReportManager()
     reportManager.writeReport(reportData)
     reportManager.displayReport()

@@ -12,6 +12,7 @@ import time
 import glob
 import cPickle as pickle
 import traceback
+import numbers
 from datetime import date,timedelta
 from lxml import html
 from Profile import Profile,Group
@@ -34,13 +35,12 @@ class CrawlerGroup(Group):
 
     def fill(self,session):
         sys.stderr.write("Loading Group [%s]\n" % self.Id)
-        assert isinstance(self.Id,int)
+        assert isinstance(self.Id,numbers.Number)
         self._link  =   "https://fetlife.com/groups/%s" % self.Id
         self._page  =   session.get(self._link)
-        if self._page.url != self._link:
+        if self._page.url != self._link or self._page.status_code == 500:
             sys.stderr.write("Missing Profile [%s]\n" % self.Id)
             return False
-
         tree            =   html.fromstring(self._page.text)
         self.Name       =   str(tree.xpath('//h2[@class="group_name bottom"]/a/text()')[0].encode('utf8'))
         text            =   tree.xpath('//h2[@class="group_name bottom"]/following-sibling::p/text()')[0]
@@ -133,7 +133,7 @@ class CrawlerProfile(Profile):
 
     def fill(self,session):
         sys.stderr.write("Loading Profile [%s]\n" % self.Id)
-        assert isinstance(self.Id,int)
+        assert isinstance(self.Id,numbers.Number)
         self._link    =   "https://fetlife.com/users/%s" % self.Id
         self._page    =   session.get(self._link)
         if self._page.url != self._link:
@@ -456,6 +456,7 @@ if __name__ == "__main__":
     parser.add_option('-r', '--rebuild', help="rebuild the progress file",action="store_true",default=False)
     parser.add_option('-i', '--init', help="init the progress file",action="store_true",default=False)
     parser.add_option('-e', '--error', help="re-examine the error pages",action="store_true",default=False)
+    parser.add_option('-s', '--sequence', help="examine progress to find unvisited profiles",action="store_true",default=False)
 
     options, args = parser.parse_args()
 
@@ -483,7 +484,19 @@ if __name__ == "__main__":
         Progress(True)
         progress.printProgress()
         sys.exit(0)
-
+    elif options.sequence:
+        sys.stderr.write("Calculating Unvisted Profiles\n")
+        progress = Progress()
+        maxPid  =   progress.maxProfile()
+        sys.stderr.write("Max Profile Id [%s]\n" % maxPid)
+        for i in range(maxPid):
+            if i%1024 == 0:
+                sys.stderr.write("[%12s]\n" % i)
+            if not progress.knownProfile(i):
+                progress.pendingProfile(i)
+        progress.printProgress()
+        progress.saveProgress()
+        sys.exit(0)
     if options.profile is not None:
         profile = CrawlerProfile(options.profile)
         if profile.fill(session):
