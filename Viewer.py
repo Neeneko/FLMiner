@@ -57,6 +57,7 @@ if __name__ == "__main__":
     reportData.Graphs.append(genderGraph)
     for v in genderGraphs.values():
         reportData.Graphs.append(v)
+    """
     sys.stderr.write("Building HeatMaps\n")
     for heatMapOrigin in profileDb.GetDegreeOrigins():
         profileName = profileDb.GetProfileName(heatMapOrigin)
@@ -100,6 +101,7 @@ if __name__ == "__main__":
             fetishIds[row[1]]   =   row[0]
 
     sys.stderr.write("Done Fetishes\n")
+    """
     reportManager   =   ReportManager()
     reportManager.writeReport(reportData)
     reportManager.displayReport()

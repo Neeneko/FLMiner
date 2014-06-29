@@ -99,7 +99,7 @@ if __name__ == "__main__":
                         line.append(hashlib.md5(b"%s" % row[idx]).hexdigest())
                     elif nullMask[idx] is True:
                         line.append("Redacted")
-                    elif isinstance(row[idx],int):
+                    elif isinstance(row[idx],tuple([int,long,float])):
                         line.append("%s" % row[idx])
                     elif row[idx] is None:
                         line.append("")
