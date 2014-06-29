@@ -191,6 +191,12 @@ class Profile(object):
         self.CrawlDate      =   "%s/%s/%s" % (now.day,now.month,now.year)
 
     def save(self):
+        if hasattr(self,"_page"):
+            delattr(self,"_page") 
+
+        if hasattr(self,"_link"):
+            delattr(self,"_link") 
+
         if not os.path.exists("Profiles"):
             os.mkdir("Profiles")
         fileName = os.path.join("Profiles","%s.dat" % self.Id)
